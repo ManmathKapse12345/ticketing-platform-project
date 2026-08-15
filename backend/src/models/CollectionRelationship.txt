@@ -1,0 +1,70 @@
+Tenant (Organizer)
+        |
+        |
+        v
+      Event
+        |
+        |
+        v
+   TicketTier
+
+User
+ |
+ v
+Order
+ |
+ v
+Payment
+ |
+ v
+Refund
+
+Order
+ |
+ v
+Ticket
+
+
+=====================================================================================================================================================================================================================
+
+curl -X POST "http://localhost:5000/api/auth/register" \
+-H "Content-Type:application/json" \
+-d '{"name":"Manmath kapse","email":"manmathkapse9@gmail.com","password":"Manmath@123","role":"owner","companyName":"SRUJON Intelligence Solution","branding":"SRUJON","payoutDetails":"XYZ"}'
+
+curl -X POST "http://localhost:5000/api/auth/register" \
+-H "Content-Type:application/json" \
+-d '{"name":"Prastu kapse","email":"prastukapse9@gmail.com","password":"prastu@123","role":"admin","companyName":"SRUJON Intelligence Solution"}'
+
+curl -X POST "http://localhost:5000/api/auth/register" \
+-H "Content-Type:application/json" \
+-d '{"name":"Harshita kapse","email":"harshitakapse9@gmail.com","password":"harshita@123","role":"admin","companyName":"D-Mart Solution"}'
+
+curl -X POST "http://localhost:5000/api/auth/register" \
+-H "Content-Type:application/json" \
+-d '{"name":"Harshita kapse","email":"harshitakapse9@gmail.com","password":"harshita@123","role":"owner","companyName":"SRUJON Intelligence Solution"}'
+
+curl -X POST "http://localhost:5000/api/auth/login" \
+-H "Content-Type:application/json" \
+-d '{"email":"prastukapse9@gmail.com","password":"prastu@123"}'
+
+curl -X POST "http://localhost:5000/api/auth/login" \
+-H "Content-Type:application/json" \
+-d '{"email":"manmathkapse9@gmail.com","password":"Manmath@123"}'
+
+
+=====================================================================================================================================================================================================================
+
+routes/
+  auth.route.js            → /register, /login  (public, self-service only)
+  organization.route.js    → /organizations/:id/invite, /organizations/:id/members, etc.
+  invite.route.js          → /invites/:token, /invites/:token/accept-new, /invites/:token/accept-existing
+
+controllers/
+  auth.controller.js        → register, login
+  organization.controller.js→ sendInvite, listMembers, removeMember, updateMemberRole
+  invite.controller.js      → getInviteDetails, acceptInviteNewUser, acceptInviteExistingUser
+
+services/
+  auth.service.js           → registerCustomer, registerOwner, loginUser
+  organization.service.js   → createInvite, addMemberToOrg, removeMemberFromOrg
+  invite.service.js         → generateInviteToken, verifyInviteToken, consumeInvite
