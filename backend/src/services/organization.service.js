@@ -277,10 +277,65 @@ const updateMemberRole = async (
   return updateOrganization;
 };
 
+const getOrganizationById = async (organizationId) => {
+  const organization = await Organization.findById(organizationId);
+  if(!organization){
+    throw new ApiError(404, "Organization not found");
+  }
+  return organization;
+};
+
+const getOrganizationByMemberId = async (memberId) => {
+  const organization = await Organization.find({
+    "members.userId": memberId,
+  });
+  if(organization.length === 0){
+    throw new ApiError(404,"No organization found for this member");
+  }
+  return organization;
+};
+
+const updateOrganizationById = async(organizationId,data) => {
+  // payoutDetails is intentionally excluded here — it must only ever be written
+  // through payout.service.js's encrypt-on-write flow, never as raw client input.
+  const { name, branding } = data;
+  const setFields = {
+    ...(name !== undefined && { name }),
+    ...(branding !== undefined && { branding }),
+  }
+  if(Object.keys(setFields).length === 0){ 
+    throw new ApiError(400, "No fields provided to update");
+  }
+  const updated = await Organization.findByIdAndUpdate(
+    organizationId,
+    { $set: setFields },
+    { new: true, runValidators: true},
+  );
+
+  if(!updated)  throw new ApiError(404,"Organization not found");
+  return updated;
+}
+
+const getAllMembersByOrganizationId = async(organizationId) => {
+  const organization = await Organization.findById(organizationId);
+  if(!organization){
+    throw new ApiError(400,"No Organization were found");
+  }
+  const members = organization.members;
+  if(!members){
+    throw new ApiError(400,"No members of organization were found");
+  }
+  return members;
+}
+
 module.exports = {
   inviteMember,
   acceptInviteForExistingUser,
   registerAndAcceptInvite,
   removeMember,
   updateMemberRole,
+  getOrganizationById,
+  getOrganizationByMemberId,
+  updateOrganizationById,
+  getAllMembersByOrganizationId
 };

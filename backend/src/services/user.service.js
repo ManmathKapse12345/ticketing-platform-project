@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/0001_user.model");
+const RefreshToken = require("../models/0010_refresh_token.js");
 const ApiError = require("../utils/apiError.js");
 const { sendEmail, generateVerificationToken } = require("../utils/auth.utils.js");
 
@@ -64,4 +65,40 @@ const updateProfile = async (userId, { name, email, currentPassword, newPassword
     return safeUser;
 }
 
-module.exports = updateProfile;
+const getUserById = async (userId) => {
+    const user = await User.findById(userId);
+    if(!user){
+        throw new ApiError(404," User not found ");
+    }
+    return user;
+}
+
+const changePassword = async (userId, { currentPassword, newPassword }) => {
+    const user = await User.findById(userId).select("+password");
+    if(!user){
+        throw new ApiError(404," User not found ");
+    }
+
+    const valid = await bcrypt.compare(currentPassword,user.password);
+    if(!valid){
+        throw new ApiError(401,"Current Password is incorrect");
+    }
+
+    user.password = await bcrypt.hash(newPassword,12);
+    await user.save();
+
+    await RefreshToken.updateMany(
+        { userId: user._id, revoked: false },
+        { $set: { revoked: true, revokedAt: new Date() } },
+    );
+
+    const safeUser = user.toObject();
+    delete safeUser.password;
+    delete safeUser.verifyToken;
+    delete safeUser.verifyTokenExpires;
+    delete safeUser.resetPasswordToken;
+    delete safeUser.resetPasswordExpires;
+    return safeUser;
+}
+
+module.exports = { updateProfile, getUserById, changePassword };

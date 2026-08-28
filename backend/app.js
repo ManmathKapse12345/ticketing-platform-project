@@ -1,9 +1,15 @@
+require("dotenv").config();
+
 const express = require("express");
 const authRoutes = require("./src/routes/auth.routes.js");
 const errorHandler = require("./src/middleware/errorHandler.js");
 const userRoutes = require("./src/routes/user.routes.js");
 const organizationRoutes = require("./src/routes/organization.routes.js");
 const eventRoutes = require("./src/routes/event.routes.js");
+const orderRoutes = require("./src/routes/order.routes.js");
+const paymentRoutes = require("./src/routes/payment.routes.js");
+const ticketRoutes = require("./src/routes/ticket.routes.js");
+const publicEventRoutes = require("./src/routes/publicEvent.routes.js");
 const validateObjectId = require("./src/middleware/validateObjectId.middleware.js");
 const cookieParser = require("cookie-parser");
 const dns = require("dns");
@@ -17,8 +23,6 @@ dns.setServers([
   '1.1.1.1',
   '8.8.8.8'
 ]);
-
-require("dotenv").config();
 
 const app = express();
 
@@ -52,6 +56,25 @@ app.use(
   validateObjectId("organizationId"),
   eventRoutes,
 );
+app.use(
+  "/api/orders",
+  orderRoutes,
+);
+
+app.use(
+  "/api/payments",
+  paymentRoutes,
+)
+
+app.use(
+  "/api/tickets",
+  ticketRoutes
+)
+
+app.use(
+  "/api/events",
+  publicEventRoutes
+)
 
 app.get("/", (req, res) => {
   res.json({ success: true, message: "Backend is running", requestId: req.id });

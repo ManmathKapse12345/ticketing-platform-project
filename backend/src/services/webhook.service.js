@@ -1,4 +1,4 @@
-const WebhookEvent = require("../models/0013_webhookEvent.model.js");
+ const WebhookEvent = require("../models/0013_webhookEvent.model.js");
 
 const processWebhookOnce = async (
   gateway,
@@ -8,20 +8,39 @@ const processWebhookOnce = async (
 ) => {
   let event;
   try {
-    event = await WebhookEvent.create({
+    const eventExists = await WebhookEvent.findOne({
       gateway,
       providerEventId,
-      eventType,
+      // eventType,
     });
+    if (eventExists) {
+      // A previous delivery of this event failed — let the gateway's retry reprocess it
+      // instead of treating it as an already-handled duplicate.
+      if (eventExists.status !== "FAILED") return { duplicate: true };
+
+      const claimed = await WebhookEvent.findOneAndUpdate(
+        { _id: eventExists._id, status: "FAILED" },
+        { $set: { status: "PROCESSING" } },
+        { new: true },
+      );
+      if (!claimed) return { duplicate: true };
+      event = claimed;
+    } else {
+      event = await WebhookEvent.create({
+        gateway,
+        providerEventId,
+        eventType,
+      });
+    }
   } catch (error) {
     if (error.code === 11000) {
-      event = await WebhookEvent.findOne({ gateway, providerEventId });
-      if (!event || event.status === "PROCESSED") {
+      const existing = await WebhookEvent.findOne({ gateway, providerEventId });
+      if (!existing || existing.status !== "FAILED") {
         return { duplicate: true };
       }
 
       const claimed = await WebhookEvent.findOneAndUpdate(
-        { _id: event._id, status: "FAILED" },
+        { _id: existing._id, status: "FAILED" },
         { $set: { status: "PROCESSING" } },
         { new: true },
       );

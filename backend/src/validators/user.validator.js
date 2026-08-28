@@ -10,4 +10,12 @@ const updateProfileSchema = z.object({
     { message: "currentPassword is required to set a new Password" }
 )
 
-module.exports = updateProfileSchema;
+const changePasswordSchema = z.object({
+    currentPassword:z.string().min(1,"currentPassword is required"),
+    newPassword:z.string().min(8,"newPassword must be at least 8 characters"),
+}).refine(
+    (data) => data.newPassword !== data.currentPassword,
+    { message: "newPassword must be different from currentPassword", path:["newPassword"] }
+)
+
+module.exports = { updateProfileSchema, changePasswordSchema };

@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "migrate:payout-details": "node scripts/migrate-payout-details.js",
     "migrate:money": "node scripts/migrate-money-to-minor-units.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --runInBand"
   },
   "keywords": [],
   "author": "",
@@ -30,9 +30,13 @@
     "nodemailer": "^9.0.5",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "stripe": "^22.6.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "jest": "^30.5.0",
+    "mongodb-memory-server": "^11.2.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
   }
 }

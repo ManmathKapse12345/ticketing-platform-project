@@ -15,12 +15,16 @@ const {
   updateTicketTierRequest,
   deleteTicketTierRequest,
 } = require("../controllers/ticketTier.controller.js");
+const { createOrderRequest } = require("../controllers/order.controller.js");
+const authorize = require("../middleware/requireRole.middleware.js");
+const { checkInTicketRequest, listEventTicketsRequest } = require("../controllers/ticket.controller.js");
 
 const router = express.Router({ mergeParams: true });
 
 const ANY_MEMBER = ["viewer", "editor", "admin", "owner"];
 const EDITOR_UP = ["editor", "admin", "owner"];
 const ADMIN_UP = ["admin", "owner"];
+const CUSTOMER_UP = ["customer","platformAdmin"];
 
 router.use(verifyToken);
 
@@ -68,6 +72,27 @@ router.delete(
   validateObjectId("eventId", "tierId"),
   requireOrganizationRole(...ADMIN_UP),
   deleteTicketTierRequest,
+);
+
+router.post(
+  "/:eventId/orders",
+  validateObjectId("eventId"),
+  authorize(...CUSTOMER_UP),
+  createOrderRequest,
+);
+
+router.post(
+  "/:eventId/checkin",
+  validateObjectId("eventId"),
+  requireOrganizationRole(...ANY_MEMBER),
+  checkInTicketRequest
+)
+
+router.get(
+  "/:eventId/tickets",
+  validateObjectId("eventId"),
+  requireOrganizationRole(...ANY_MEMBER),
+  listEventTicketsRequest,
 );
 
 module.exports = router;
