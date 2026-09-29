@@ -1,7 +1,7 @@
 const express = require("express");
 const verifyToken = require("../middleware/verifyToken.middleware.js");
 const requireOrganizationRole = require("../middleware/verifyOwner.middleware.js");
-const validateObjectId = require("../middleware/validateObjectId.middleware.js");
+const validateUuid = require("../middleware/validateUuid.middleware.js");
 const {
   createEventRequest,
   listEventsRequest,
@@ -17,14 +17,17 @@ const {
 } = require("../controllers/ticketTier.controller.js");
 const { createOrderRequest } = require("../controllers/order.controller.js");
 const authorize = require("../middleware/requireRole.middleware.js");
-const { checkInTicketRequest, listEventTicketsRequest } = require("../controllers/ticket.controller.js");
+const {
+  checkInTicketRequest,
+  listEventTicketsRequest,
+} = require("../controllers/ticket.controller.js");
 
 const router = express.Router({ mergeParams: true });
 
 const ANY_MEMBER = ["viewer", "editor", "admin", "owner"];
 const EDITOR_UP = ["editor", "admin", "owner"];
 const ADMIN_UP = ["admin", "owner"];
-const CUSTOMER_UP = ["customer","platformAdmin"];
+const CUSTOMER_UP = ["customer", "platformAdmin"];
 
 router.use(verifyToken);
 
@@ -32,65 +35,65 @@ router.post("/", requireOrganizationRole(...EDITOR_UP), createEventRequest);
 router.get("/", requireOrganizationRole(...ANY_MEMBER), listEventsRequest);
 router.get(
   "/:eventId",
-  validateObjectId("eventId"),
+  validateUuid("eventId"),
   requireOrganizationRole(...ANY_MEMBER),
   getEventRequest,
 );
 router.patch(
   "/:eventId",
-  validateObjectId("eventId"),
+  validateUuid("eventId"),
   requireOrganizationRole(...EDITOR_UP),
   updateEventRequest,
 );
 router.delete(
   "/:eventId",
-  validateObjectId("eventId"),
+  validateUuid("eventId"),
   requireOrganizationRole(...ADMIN_UP),
   cancelEventRequest,
 );
 
 router.post(
   "/:eventId/tiers",
-  validateObjectId("eventId"),
+  validateUuid("eventId"),
   requireOrganizationRole(...EDITOR_UP),
   createTicketTierRequest,
 );
 router.get(
   "/:eventId/tiers",
-  validateObjectId("eventId"),
+  validateUuid("eventId"),
   requireOrganizationRole(...ANY_MEMBER),
   listTicketTiersRequest,
 );
 router.patch(
   "/:eventId/tiers/:tierId",
-  validateObjectId("eventId", "tierId"),
+  validateUuid("eventId", "tierId"),
   requireOrganizationRole(...EDITOR_UP),
   updateTicketTierRequest,
 );
 router.delete(
   "/:eventId/tiers/:tierId",
-  validateObjectId("eventId", "tierId"),
+  validateUuid("eventId", "tierId"),
   requireOrganizationRole(...ADMIN_UP),
   deleteTicketTierRequest,
 );
 
 router.post(
   "/:eventId/orders",
-  validateObjectId("eventId"),
+  validateUuid("eventId"),
   authorize(...CUSTOMER_UP),
   createOrderRequest,
 );
 
 router.post(
   "/:eventId/checkin",
-  validateObjectId("eventId"),
+  validateUuid("eventId"),
   requireOrganizationRole(...ANY_MEMBER),
-  checkInTicketRequest
-)
+  checkInTicketRequest,
+);
 
 router.get(
   "/:eventId/tickets",
-  validateObjectId("eventId"),
+  validateUuid("eventId"),
   requireOrganizationRole(...ANY_MEMBER),
   listEventTicketsRequest,
 );

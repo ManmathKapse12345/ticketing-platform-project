@@ -7,7 +7,7 @@ const verifyToken = async (req, res, next) => {
       ? authHeader.split(" ")[1]
       : req.cookies.token;
     const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-    req.user = { _id:payload.sub,role:payload.role };
+    req.user = { id:payload.sub,role:payload.role };
     next();
   } catch (err) {
     if (err instanceof ApiError) {

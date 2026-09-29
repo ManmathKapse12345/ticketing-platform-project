@@ -1,14 +1,17 @@
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { verifyWebhookSignature } = require("../utils/razorpay.utils.js");
 
 const verifySignature = async (req,res,next) => {
-    const signature = req.headers["stripe-signature"];
-    let event;
     try{
-        event = stripe.webhooks.constructEvent(req.rawBody, signature,process.env.STRIPE_WEBHOOK_SECRET);
-        req.gatewayEvent = event;
+        const signature = req.headers["x-razorpay-signature"];
+        if(!req.rawBody || !verifyWebhookSignature(req.rawBody, signature)){
+            const error = new Error("Invalid webhook signature");
+            error.statusCode = 400;
+            return next(error);
+        }
+        // Razorpay sends the unique event id in a header rather than in the body.
+        req.gatewayEvent = { ...req.body, id: req.headers["x-razorpay-event-id"] };
         next();
     }catch(error){
-        error.statusCode = 400;
         next(error);
     }
 }

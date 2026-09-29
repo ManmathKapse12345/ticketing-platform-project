@@ -1,6 +1,6 @@
-const mongoose = require("mongoose");
+const prisma = require("../src/config/prisma.js");
 const dbHandler = require("./dbHandler");
-const Organization = require("../src/models/0003_organizer.model.js");
+const { makeUser, makeOrganization } = require("./factories");
 const {
   getOrganizationByMemberId,
   updateOrganizationById,
@@ -20,18 +20,19 @@ afterAll(async () => {
 
 describe("getOrganizationByMemberId", () => {
   it("finds organizations for a member regardless of their org-scoped role", async () => {
-    const userId = new mongoose.Types.ObjectId();
-    await Organization.create({
+    const { id: userId } = await makeUser();
+    const { id: otherUserId } = await makeUser();
+    await makeOrganization({
       name: "Viewer Org",
-      members: [{ userId, role: "viewer" }],
+      members: { create: { userId, role: "viewer" } },
     });
-    await Organization.create({
+    await makeOrganization({
       name: "Owner Org",
-      members: [{ userId, role: "owner" }],
+      members: { create: { userId, role: "owner" } },
     });
-    await Organization.create({
+    await makeOrganization({
       name: "Unrelated Org",
-      members: [{ userId: new mongoose.Types.ObjectId(), role: "owner" }],
+      members: { create: { userId: otherUserId, role: "owner" } },
     });
 
     const orgs = await getOrganizationByMemberId(userId);
@@ -39,28 +40,29 @@ describe("getOrganizationByMemberId", () => {
   });
 
   it("throws 404 when the user is a member of nothing", async () => {
-    const userId = new mongoose.Types.ObjectId();
+    const { id: userId } = await makeUser();
     await expect(getOrganizationByMemberId(userId)).rejects.toMatchObject({ statusCode: 404 });
   });
 });
 
 describe("updateOrganizationById", () => {
   it("updates name/branding but ignores any client-supplied payoutDetails", async () => {
-    const org = await Organization.create({
-      name: "Original Name",
-      members: [],
-    });
+    const org = await makeOrganization({ name: "Original Name" });
 
-    const updated = await updateOrganizationById(org._id, {
+    const updated = await updateOrganizationById(org.id, {
       name: "New Name",
       branding: { primaryColor: "#000000" },
       payoutDetails: { encrypted: "attacker-controlled-value" },
     });
 
     expect(updated.name).toBe("New Name");
-    expect(updated.branding.primaryColor).toBe("#000000");
+    expect(updated.primaryColor).toBe("#000000");
+    expect(updated).not.toHaveProperty("payoutDetailsEncrypted"); // never returned to clients
 
-    const raw = await Organization.findById(org._id).select("+payoutDetails.encrypted");
-    expect(raw.payoutDetails?.encrypted).toBeUndefined();
+    const raw = await prisma.organization.findUnique({
+      where: { id: org.id },
+      omit: { payoutDetailsEncrypted: false },
+    });
+    expect(raw.payoutDetailsEncrypted).toBeNull();
   });
 });

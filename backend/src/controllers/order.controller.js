@@ -1,9 +1,10 @@
-const { createOrderSchema } = require("../validators/order.validator.js");
+const { createOrderSchema, verifyPaymentSchema } = require("../validators/order.validator.js");
 const {
   createOrder,
   getOrder,
   getAllOrder,
-  paymentIntent,
+  createCheckout,
+  verifyCheckoutPayment,
   listOrganizationOrders,
   getOrganizationOrder,
 } = require("../services/order.service.js");
@@ -18,7 +19,7 @@ const createOrderRequest = async (req, res, next) => {
     const { eventId, organizationId } = req.params;
 
     const order = await createOrder(
-      req.user._id,
+      req.user.id,
       organizationId,
       eventId,
       requestedItems,
@@ -32,7 +33,7 @@ const createOrderRequest = async (req, res, next) => {
 
 const getOrderRequest = async (req, res, next) => {
   try {
-    const order = await getOrder(req.params.orderId, req.user._id);
+    const order = await getOrder(req.params.orderId, req.user.id);
     return res.status(200).json({ success: true, order });
   } catch (error) {
     next(error);
@@ -41,18 +42,31 @@ const getOrderRequest = async (req, res, next) => {
 
 const getAllOrderRequest = async (req, res, next) => {
   try {
-    const orders = await getAllOrder(req.user._id);
+    const orders = await getAllOrder(req.user.id);
     return res.status(200).json({ success: true, orders });
   } catch (error) {
     next(error);
   }
 };
 
-const paymentIntentRequest = async (req, res, next) => {
+const checkoutRequest = async (req, res, next) => {
   try{
     const { orderId } = req.params;
-    const clientSecret = await paymentIntent(orderId,req.user._id);
-    return res.status(200).json({success:true, clientSecret: clientSecret});
+    const checkout = await createCheckout(orderId,req.user.id);
+    return res.status(200).json({success:true, checkout});
+  }catch(error){
+    next(error);
+  }
+}
+
+const verifyPaymentRequest = async (req, res, next) => {
+  try{
+    const parsed = verifyPaymentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    }
+    const order = await verifyCheckoutPayment(req.params.orderId, req.user.id, parsed.data);
+    return res.status(200).json({ success: true, order });
   }catch(error){
     next(error);
   }
@@ -80,7 +94,8 @@ module.exports = {
   createOrderRequest,
   getOrderRequest,
   getAllOrderRequest,
-  paymentIntentRequest,
+  checkoutRequest,
+  verifyPaymentRequest,
   listOrganizationOrdersRequest,
   getOrganizationOrderRequest,
 };

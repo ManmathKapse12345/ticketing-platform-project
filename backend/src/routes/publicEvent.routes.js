@@ -1,5 +1,5 @@
 const express = require("express");
-const validateObjectId = require("../middleware/validateObjectId.middleware.js");
+const validateUuid = require("../middleware/validateUuid.middleware.js");
 const {
   listPublishedEventsRequest,
   getPublishedEventRequest,
@@ -9,7 +9,11 @@ const {
 const router = express.Router();
 
 router.get("/", listPublishedEventsRequest);
-router.get("/:eventId", validateObjectId("eventId"), getPublishedEventRequest);
-router.get("/:eventId/tiers", validateObjectId("eventId"), listPublicTicketTiersRequest);
+router.get("/:eventId", validateUuid("eventId"), getPublishedEventRequest);
+router.get(
+  "/:eventId/tiers",
+  validateUuid("eventId"),
+  listPublicTicketTiersRequest,
+);
 
 module.exports = router;

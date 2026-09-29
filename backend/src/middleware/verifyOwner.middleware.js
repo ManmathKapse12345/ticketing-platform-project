@@ -1,23 +1,27 @@
-const jwt = require("jsonwebtoken");
-const Organization = require("../models/0003_organizer.model.js");
+const prisma = require("../config/prisma.js");
 
 
 const requireOrganizationRole = (...allowedRoles) => {
     return async (req,res,next) => {
         try {
-            const organization = await Organization.findById(req.params.organizationId).select("members");
-            
-            if(!organization){
-                return res.status(404).json({
-                    message:"Organization not found"
-                })
-            }
-
-            const member = organization.members.find(
-                item => item.userId.toString() === req.user._id.toString()
-            );
+            const { organizationId } = req.params;
+            const member = await prisma.organizationMember.findUnique({
+                where: {
+                    organizationId_userId: { organizationId, userId: req.user.id },
+                },
+                include: { organization: true },
+            });
 
             if(!member){
+                const organization = await prisma.organization.findUnique({
+                    where: { id: organizationId },
+                    select: { id: true },
+                });
+                if(!organization){
+                    return res.status(404).json({
+                        message:"Organization not found"
+                    })
+                }
                 return res.status(403).json({
                     message:"You are not a member of this organization"
                 })
@@ -29,8 +33,9 @@ const requireOrganizationRole = (...allowedRoles) => {
                 })
             }
 
+            const { organization, ...membership } = member;
             req.organization = organization;
-            req.organizationMember = member;
+            req.organizationMember = membership;
 
             return next();
         } catch (error) {

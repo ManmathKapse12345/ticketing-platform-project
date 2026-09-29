@@ -1,24 +1,17 @@
-const mongoose = require("mongoose");
-const { MongoMemoryServer } = require("mongodb-memory-server");
+const prisma = require("../src/config/prisma.js");
 
-let mongod;
-
-const connect = async () => {
-  mongod = await MongoMemoryServer.create();
-  await mongoose.connect(mongod.getUri());
-};
+const connect = () => prisma.$connect();
 
 const clearDatabase = async () => {
-  const collections = mongoose.connection.collections;
-  for (const key in collections) {
-    await collections[key].deleteMany({});
-  }
+  const tables = await prisma.$queryRaw`
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
+  if (tables.length === 0) return;
+
+  const tableList = tables.map(({ tablename }) => `"public"."${tablename}"`).join(", ");
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tableList} RESTART IDENTITY CASCADE`);
 };
 
-const closeDatabase = async () => {
-  await mongoose.connection.dropDatabase();
-  await mongoose.connection.close();
-  if (mongod) await mongod.stop();
-};
+const closeDatabase = () => prisma.$disconnect();
 
 module.exports = { connect, clearDatabase, closeDatabase };

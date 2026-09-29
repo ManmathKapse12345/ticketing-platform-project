@@ -1,46 +1,45 @@
-const Event = require("../models/0004_event.model.js");
+const prisma = require("../config/prisma.js");
 const ApiError = require("../utils/apiError.js");
 const { findEventForOrganization } = require("./ownership.service.js");
 
 const createEvent = async (organizationId, eventData) =>
-  Event.create({
-    ...eventData,
-    organizationId,
+  prisma.event.create({
+    data: {
+      ...eventData,
+      organizationId,
+    },
   });
 
 const listEvents = (organizationId) =>
-  Event.find({ organizationId }).sort({ startDate: 1 });
+  prisma.event.findMany({
+    where: { organizationId },
+    orderBy: { startDate: "asc" },
+  });
 
 const getEvent = (eventId, organizationId) =>
   findEventForOrganization(eventId, organizationId);
 
+// updateMany scopes the write to this organization in one statement;
+// count 0 means the event doesn't exist or belongs to another organization.
+const updateEventForOrganization = async (eventId, organizationId, data) => {
+  const { count } = await prisma.event.updateMany({
+    where: { id: eventId, organizationId },
+    data,
+  });
+
+  if (count === 0) {
+    throw new ApiError(404, "Event not found for this organization");
+  }
+
+  return prisma.event.findUnique({ where: { id: eventId } });
+};
+
 const updateEvent = async (eventId, organizationId, eventData) => {
   const { organizationId: ignoredOrganizationId, ...safeEventData } = eventData;
-  const event = await Event.findOneAndUpdate(
-    { _id: eventId, organizationId },
-    { $set: safeEventData },
-    { new: true, runValidators: true },
-  );
-
-  if (!event) {
-    throw new ApiError(404, "Event not found for this organization");
-  }
-
-  return event;
+  return updateEventForOrganization(eventId, organizationId, safeEventData);
 };
 
-const cancelEvent = async (eventId, organizationId) => {
-  const event = await Event.findOneAndUpdate(
-    { _id: eventId, organizationId },
-    { $set: { status: "CANCELLED" } },
-    { new: true, runValidators: true },
-  );
-
-  if (!event) {
-    throw new ApiError(404, "Event not found for this organization");
-  }
-
-  return event;
-};
+const cancelEvent = (eventId, organizationId) =>
+  updateEventForOrganization(eventId, organizationId, { status: "CANCELLED" });
 
 module.exports = { createEvent, listEvents, getEvent, updateEvent, cancelEvent };

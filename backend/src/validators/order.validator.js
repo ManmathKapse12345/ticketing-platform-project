@@ -1,15 +1,10 @@
 const { z } = require("zod");
-const mongoose = require("mongoose");
-
-const objectId = z
-  .string()
-  .refine((val) => mongoose.isValidObjectId(val), { message: "Invalid id" });
 
 const createOrderSchema = z.object({
   requestedItems: z
     .array(
       z.object({
-        ticketTier: objectId,
+        ticketTier: z.uuid({ message: "Invalid id" }),
         quantity: z.number().int().min(1),
       }),
     )
@@ -17,4 +12,11 @@ const createOrderSchema = z.object({
   idempotencyKey: z.string().min(1),
 });
 
-module.exports = { createOrderSchema };
+// Fields Razorpay Checkout.js hands to its success handler, forwarded by the frontend.
+const verifyPaymentSchema = z.object({
+  razorpayOrderId: z.string().min(1),
+  razorpayPaymentId: z.string().min(1),
+  razorpaySignature: z.string().min(1),
+});
+
+module.exports = { createOrderSchema, verifyPaymentSchema };

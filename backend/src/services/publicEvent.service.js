@@ -1,19 +1,26 @@
-const Event = require("../models/0004_event.model.js");
-const TicketTier = require("../models/0005_ticketTier.model.js");
+const prisma = require("../config/prisma.js");
 const ApiError = require("../utils/apiError.js");
 
 const listPublishedEvents = () =>
-  Event.find({ status: "PUBLISHED" }).sort({ startDate: 1 });
+  prisma.event.findMany({
+    where: { status: "PUBLISHED" },
+    orderBy: { startDate: "asc" },
+  });
 
 const getPublishedEvent = async (eventId) => {
-  const event = await Event.findOne({ _id: eventId, status: "PUBLISHED" });
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, status: "PUBLISHED" },
+  });
   if (!event) throw new ApiError(404, "Event not found");
   return event;
 };
 
 const listPublicTicketTiers = async (eventId) => {
   await getPublishedEvent(eventId);
-  return TicketTier.find({ eventId }).sort({ createdAt: 1 });
+  return prisma.ticketTier.findMany({
+    where: { eventId },
+    orderBy: { createdAt: "asc" },
+  });
 };
 
 module.exports = { listPublishedEvents, getPublishedEvent, listPublicTicketTiers };

@@ -12,7 +12,7 @@ const getOrganizationByIdRequest = async (req,res,next) => {
 
 const getOrganizationByMemberIdRequest = async (req,res,next) => {
     try {
-        const memberId = req.user._id;
+        const memberId = req.user.id;
 
         const organization = await getOrganizationByMemberId(memberId);
 

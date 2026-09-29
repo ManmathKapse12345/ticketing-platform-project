@@ -4,7 +4,7 @@ const { processWebhookOnce } = require("../services/webhook.service");
 const handleWebhook = require("../controllers/webhook.controller");
 const router = express.Router();
 
-const ALLOWED_GATEWAYS = ["stripe", "razorpay"];
+const ALLOWED_GATEWAYS = ["razorpay"];
 
 router.post(
     "/webhook/:gateway",

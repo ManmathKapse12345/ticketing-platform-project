@@ -1,4 +1,4 @@
-const Ticket = require("../models/0007_ticket.model.js");
+const prisma = require("../config/prisma.js");
 const ApiError = require("../utils/apiError.js");
 const { verifyTicketQr } = require("../utils/qr.utils.js");
 
@@ -14,34 +14,38 @@ const checkInTicket = async (organizationId,eventId,qrCode) => {
         throw new ApiError(400,"This ticket is not valid for this event");
     }
 
-    const ticket = await Ticket.findOneAndUpdate(
-        { _id: decoded.ticketId, eventId, organizationId, status: "active"},
-        { $set: { status: "used" } },
-        { new: true },
-    );
+    // "status: active" in the filter makes this an atomic claim, so the same
+    // ticket can't be checked in twice by two scanners at once.
+    const { count } = await prisma.ticket.updateMany({
+        where: { id: decoded.ticketId, eventId, organizationId, status: "active" },
+        data: { status: "used" },
+    });
 
-    if(!ticket){
-        const existing = await Ticket.findOne({ _id: decoded.ticketId, eventId, organizationId });
-        if(!existing)  throw new ApiError(404, "Ticket not found for this event");
-        throw new ApiError(409, `Ticket already ${existing.status}`);
+    const ticket = await prisma.ticket.findFirst({
+        where: { id: decoded.ticketId, eventId, organizationId },
+    });
+
+    if(count === 0){
+        if(!ticket)  throw new ApiError(404, "Ticket not found for this event");
+        throw new ApiError(409, `Ticket already ${ticket.status}`);
     }
 
     return ticket;
 }
 
 const getSpecificTicket = async (ticketId, userId) => {
-    const ticket = await Ticket.findOne({ _id: ticketId, ownerUserId: userId });
+    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, ownerUserId: userId } });
     if(!ticket)  throw new ApiError(404,"ticket doesn't exists");
     return ticket;
 }
 
-const getAllTicket = async (userId) => {
-    const tickets = await Ticket.find({ownerUserId:userId});
-    if(!tickets)  throw new ApiError(400,"User haven't purchased any ticket");
-    return tickets;
-}
+const getAllTicket = (userId) =>
+    prisma.ticket.findMany({ where: { ownerUserId: userId } });
 
 const listEventTickets = (eventId, organizationId) =>
-    Ticket.find({ eventId, organizationId }).sort({ createdAt: 1 });
+    prisma.ticket.findMany({
+        where: { eventId, organizationId },
+        orderBy: { createdAt: "asc" },
+    });
 
 module.exports = { getSpecificTicket, getAllTicket, checkInTicket, listEventTickets }

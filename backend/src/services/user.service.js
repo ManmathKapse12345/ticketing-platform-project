@@ -1,31 +1,42 @@
 const bcrypt = require("bcrypt");
-const User = require("../models/0001_user.model");
-const RefreshToken = require("../models/0010_refresh_token.js");
+const prisma = require("../config/prisma.js");
 const ApiError = require("../utils/apiError.js");
+const { isUniqueViolation } = require("../utils/prisma.utils.js");
 const { sendEmail, generateVerificationToken } = require("../utils/auth.utils.js");
 
-const updateProfile = async (userId, { name, email, currentPassword, newPassword }) => {
-    const user = await User.findById(userId).select("+password");
+// The global `omit` in config/prisma.js hides password; these two flows need it.
+const findUserWithPassword = async (userId) => {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        omit: { password: false },
+    });
     if(!user){
         throw new ApiError(404," User not found ");
     }
+    return user;
+}
+
+const updateProfile = async (userId, { name, email, currentPassword, newPassword }) => {
+    const user = await findUserWithPassword(userId);
+    const data = {};
 
     if(name !== undefined){
-        user.name = name;
+        data.name = name;
     }
 
     let verifyUrl;
-    if(email !== undefined && email.toLowerCase() !== user.email ){
-        const existing = await User.findOne({email:email.toLowerCase()});
+    const normalizedEmail = email?.trim().toLowerCase();
+    if(normalizedEmail !== undefined && normalizedEmail !== user.email ){
+        const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         if(existing){
             throw new ApiError(409, "Email already in use");
         }
 
         const { rawToken, hashedToken } = generateVerificationToken();
-        user.email = email.toLowerCase();
-        user.isVerified = false;
-        user.verifyToken = hashedToken;
-        user.verifyTokenExpires = Date.now() + 24 * 60 * 60 * 1000;
+        data.email = normalizedEmail;
+        data.isVerified = false;
+        data.verifyToken = hashedToken;
+        data.verifyTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
         verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${rawToken}`;
     }
 
@@ -34,13 +45,14 @@ const updateProfile = async (userId, { name, email, currentPassword, newPassword
         if(!valid){
             throw new ApiError(401,"Current Password is incorrect");
         }
-        user.password = await bcrypt.hash(newPassword,12);
+        data.password = await bcrypt.hash(newPassword,12);
     }
 
+    let updated;
     try{
-        await user.save();
+        updated = await prisma.user.update({ where: { id: user.id }, data });
     }catch(err){
-        if(err.code === 11000){
+        if(isUniqueViolation(err)){
             throw new ApiError(409,"Email Already in use");
         }
         throw err;
@@ -48,7 +60,7 @@ const updateProfile = async (userId, { name, email, currentPassword, newPassword
 
     if(verifyUrl){
         await sendEmail(
-            user.email,
+            updated.email,
             "Verify your new email",
             `<p>Click below to verify your new email address:</p>
             <a href="${verifyUrl}">${verifyUrl}</a>
@@ -56,17 +68,11 @@ const updateProfile = async (userId, { name, email, currentPassword, newPassword
         );
     }
 
-    const safeUser = user.toObject();
-    delete safeUser.password;
-    delete safeUser.verifyToken;
-    delete safeUser.verifyTokenExpires;
-    delete safeUser.resetPasswordToken;
-    delete safeUser.resetPasswordExpires;
-    return safeUser;
+    return updated;
 }
 
 const getUserById = async (userId) => {
-    const user = await User.findById(userId);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if(!user){
         throw new ApiError(404," User not found ");
     }
@@ -74,31 +80,25 @@ const getUserById = async (userId) => {
 }
 
 const changePassword = async (userId, { currentPassword, newPassword }) => {
-    const user = await User.findById(userId).select("+password");
-    if(!user){
-        throw new ApiError(404," User not found ");
-    }
+    const user = await findUserWithPassword(userId);
 
     const valid = await bcrypt.compare(currentPassword,user.password);
     if(!valid){
         throw new ApiError(401,"Current Password is incorrect");
     }
 
-    user.password = await bcrypt.hash(newPassword,12);
-    await user.save();
+    const [updated] = await prisma.$transaction([
+        prisma.user.update({
+            where: { id: user.id },
+            data: { password: await bcrypt.hash(newPassword,12) },
+        }),
+        prisma.refreshToken.updateMany({
+            where: { userId: user.id, revoked: false },
+            data: { revoked: true, revokedAt: new Date() },
+        }),
+    ]);
 
-    await RefreshToken.updateMany(
-        { userId: user._id, revoked: false },
-        { $set: { revoked: true, revokedAt: new Date() } },
-    );
-
-    const safeUser = user.toObject();
-    delete safeUser.password;
-    delete safeUser.verifyToken;
-    delete safeUser.verifyTokenExpires;
-    delete safeUser.resetPasswordToken;
-    delete safeUser.resetPasswordExpires;
-    return safeUser;
+    return updated;
 }
 
 module.exports = { updateProfile, getUserById, changePassword };

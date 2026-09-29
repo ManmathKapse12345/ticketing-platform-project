@@ -1,17 +1,29 @@
 const app = require("./app.js");
 const connectDB = require("./src/config/db.js");
+const prisma = require("./src/config/prisma.js");
 const { sweepExpiredOrders } = require("./src/services/order.service.js");
 
 const PORT = process.env.PORT || 5000;
 
-// console.log(process.env.MONGODB_URI);
 connectDB().then(() => {
-  app.listen(PORT,() => {
+  const server = app.listen(PORT,() => {
     console.log(`Server running on  http://localhost:${PORT}`);
   });
-  setInterval(() => {
+  
+  const sweeper = setInterval(() => {
     sweepExpiredOrders().catch((err) => console.error("sweepExpiredOrders failed:", err));
   }, 60 * 1000);
+
+  const shutdown = async (signal) => {
+    console.log(`${signal} received, shutting down`);
+    clearInterval(sweeper);
+    server.close(async () => {
+      await prisma.$disconnect();
+      process.exit(0);
+    });
+  };
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }).catch((error) => {
-  console.error("MONGODB connection error :- ",error);
+  console.error("PostgreSQL connection error :- ",error);
 });

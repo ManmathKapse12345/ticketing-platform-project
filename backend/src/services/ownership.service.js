@@ -1,17 +1,15 @@
-const Event = require("../models/0004_event.model.js");
-const TicketTier = require("../models/0005_ticketTier.model.js");
-const Order = require("../models/0006_order.model.js");
+const prisma = require("../config/prisma.js");
 const ApiError = require("../utils/apiError.js");
 
+// `db` lets a caller run the lookup inside its own prisma.$transaction (pass `tx`).
 const findEventForOrganization = async (
   eventId,
   organizationId,
-  options = {},
+  db = prisma,
 ) => {
-  const event = await Event.findOne({
-    _id: eventId,
-    organizationId,
-  }).setOptions(options);
+  const event = await db.event.findFirst({
+    where: { id: eventId, organizationId },
+  });
 
   if (!event) {
     throw new ApiError(404, "Event not found for this organization");
@@ -23,12 +21,11 @@ const findEventForOrganization = async (
 const findTicketTierForOrganization = async (
   ticketTierId,
   organizationId,
-  options = {},
+  db = prisma,
 ) => {
-  const ticketTier = await TicketTier.findOne({
-    _id: ticketTierId,
-    organizationId,
-  }).setOptions(options);
+  const ticketTier = await db.ticketTier.findFirst({
+    where: { id: ticketTierId, organizationId },
+  });
 
   if (!ticketTier) {
     throw new ApiError(404, "Ticket tier not found for this organization");
@@ -40,12 +37,12 @@ const findTicketTierForOrganization = async (
 const findOrderForOrganization = async (
   orderId,
   organizationId,
-  options = {},
+  db = prisma,
 ) => {
-  const order = await Order.findOne({
-    _id: orderId,
-    organizationId,
-  }).setOptions(options);
+  const order = await db.order.findFirst({
+    where: { id: orderId, organizationId },
+    include: { items: true },
+  });
 
   if (!order) {
     throw new ApiError(404, "Order not found for this organization");

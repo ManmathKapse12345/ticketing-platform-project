@@ -6,7 +6,7 @@ const {
   updateMemberRole,
 } = require("../services/organization.service");
 
-const RefreshToken = require("../models/0010_refresh_token.js");
+const { saveRefreshToken } = require("../services/auth.service.js");
 const ApiError = require("../utils/apiError");
 const { generateToken, sendEmail } = require("../utils/auth.utils.js");
 
@@ -23,7 +23,7 @@ const inviteMemberRequest = async (req, res, next) => {
     if (!allowedRoles.includes(memberRole)) {
       throw new ApiError(400, "This is not role allowed");
     }
-    await inviteMember(email, organizationId, memberRole, req.user._id);
+    await inviteMember(email, organizationId, memberRole, req.user.id);
     return res.status(201).json({ message: "Invite sent successfully" });
   } catch (error) {
     return next(error);
@@ -36,7 +36,7 @@ const removeMemberRequest = async (req, res, next) => {
     const organization = await removeMember(
       organizationId,
       memberId,
-      req.user._id,
+      req.user.id,
     );
     return res.status(200).json({ message: "Member removed", organization });
   } catch (error) {
@@ -48,7 +48,7 @@ const updateRoleRequest = async (req, res, next) => {
   try {
     const { organizationId, memberId } = req.params;
     const { newRole } = req.body;
-    const requesterId = req.user._id;
+    const requesterId = req.user.id;
     const allowedRoles = ["viewer", "editor", "admin"];
     if (!allowedRoles.includes(newRole)) {
       throw new ApiError(400, "This is not role allowed");
@@ -82,12 +82,7 @@ const registerNewInviteUser = async (req, res, next) => {
     );
 
     const { accessToken, refreshToken, jti } = await generateToken(user);
-    await RefreshToken.create({
-      _id: jti,
-      userId: user._id,
-      revoked: false,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    });
+    await saveRefreshToken(jti, user.id);
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -103,16 +98,10 @@ const registerNewInviteUser = async (req, res, next) => {
       <p>This link expires in 24 hours.</p>`,
     );
 
-    const {
-      password: _pw,
-      verifyToken: _vt,
-      verifyTokenExpires: _vte,
-      ...safeUser
-    } = user.toObject();
-
+    // password and token fields are already omitted by the Prisma client (config/prisma.js)
     return res
       .status(201)
-      .json({ user: safeUser, organization, accessToken });
+      .json({ user, organization, accessToken });
   }catch(error){
     next(error);
   }

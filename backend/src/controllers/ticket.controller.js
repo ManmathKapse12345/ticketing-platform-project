@@ -3,7 +3,7 @@ const { checkInTicket, getAllTicket, getSpecificTicket, listEventTickets } = req
 
 const getAllTicketRequest = async(req,res,next) => {
     try {
-        const userId = req.user._id;
+        const userId = req.user.id;
         const tickets = await getAllTicket(userId);
         return res.status(200).json({tickets});
     } catch (error) {
@@ -14,7 +14,7 @@ const getAllTicketRequest = async(req,res,next) => {
 const getSpecificTicketRequest = async(req,res,next) => {
     try {
         const { ticketId }= req.params;
-        const ticket = await getSpecificTicket(ticketId, req.user._id);
+        const ticket = await getSpecificTicket(ticketId, req.user.id);
         return res.status(200).json({ticket});
     } catch (error) {
         next(error);

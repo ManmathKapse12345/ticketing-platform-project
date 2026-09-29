@@ -1,5 +1,5 @@
 // Checks the platform-level User.role from the JWT ("customer" | "platformAdmin") only.
-// Org-scoped roles (owner/admin/editor/viewer) live in Organization.members[] and are never
+// Org-scoped roles (owner/admin/editor/viewer) live in the OrganizationMember table and are never
 // part of this token — use requireOrganizationRole (verifyOwner.middleware.js) for those.
 const authorize = (...roles) => {
     return (req,res,next) => {

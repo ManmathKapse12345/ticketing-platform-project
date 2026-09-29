@@ -1,4 +1,15 @@
- const WebhookEvent = require("../models/0013_webhookEvent.model.js");
+const prisma = require("../config/prisma.js");
+const { isUniqueViolation } = require("../utils/prisma.utils.js");
+
+// Flip a FAILED event back to PROCESSING so this delivery can retry it. The status
+// check in the filter makes it an atomic claim: only one concurrent retry wins.
+const claimFailedEvent = async (id) => {
+  const { count } = await prisma.webhookEvent.updateMany({
+    where: { id, status: "FAILED" },
+    data: { status: "PROCESSING" },
+  });
+  return count === 1;
+};
 
 const processWebhookOnce = async (
   gateway,
@@ -6,65 +17,49 @@ const processWebhookOnce = async (
   eventType,
   handler,
 ) => {
+  const findEvent = () =>
+    prisma.webhookEvent.findUnique({
+      where: { gateway_providerEventId: { gateway, providerEventId } },
+    });
+
   let event;
   try {
-    const eventExists = await WebhookEvent.findOne({
-      gateway,
-      providerEventId,
-      // eventType,
-    });
+    const eventExists = await findEvent();
     if (eventExists) {
       // A previous delivery of this event failed — let the gateway's retry reprocess it
       // instead of treating it as an already-handled duplicate.
       if (eventExists.status !== "FAILED") return { duplicate: true };
-
-      const claimed = await WebhookEvent.findOneAndUpdate(
-        { _id: eventExists._id, status: "FAILED" },
-        { $set: { status: "PROCESSING" } },
-        { new: true },
-      );
-      if (!claimed) return { duplicate: true };
-      event = claimed;
+      if (!(await claimFailedEvent(eventExists.id))) return { duplicate: true };
+      event = eventExists;
     } else {
-      event = await WebhookEvent.create({
-        gateway,
-        providerEventId,
-        eventType,
+      event = await prisma.webhookEvent.create({
+        data: { gateway, providerEventId, eventType },
       });
     }
   } catch (error) {
-    if (error.code === 11000) {
-      const existing = await WebhookEvent.findOne({ gateway, providerEventId });
-      if (!existing || existing.status !== "FAILED") {
-        return { duplicate: true };
-      }
+    if (!isUniqueViolation(error)) throw error;
 
-      const claimed = await WebhookEvent.findOneAndUpdate(
-        { _id: existing._id, status: "FAILED" },
-        { $set: { status: "PROCESSING" } },
-        { new: true },
-      );
-      if (!claimed) {
-        return { duplicate: true };
-      }
-      event = claimed;
+    // A concurrent delivery of the same event inserted it first.
+    const existing = await findEvent();
+    if (!existing || existing.status !== "FAILED") {
+      return { duplicate: true };
     }
-    else {
-      throw error;
-    }
+    if (!(await claimFailedEvent(existing.id))) return { duplicate: true };
+    event = existing;
   }
 
   try {
     await handler();
-    event.status = "PROCESSED";
-    event.processedAt = new Date();
-    await event.save();
+    await prisma.webhookEvent.update({
+      where: { id: event.id },
+      data: { status: "PROCESSED", processedAt: new Date() },
+    });
     return { duplicate: false };
   } catch (error) {
-    await WebhookEvent.updateOne(
-      { _id: event._id },
-      { $set: { status: "FAILED" } },
-    );
+    await prisma.webhookEvent.update({
+      where: { id: event.id },
+      data: { status: "FAILED" },
+    });
     throw error;
   }
 };

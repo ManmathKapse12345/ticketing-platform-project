@@ -1,0 +1,302 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  customer
+  platformAdmin
+}
+
+enum OrgRole {
+  viewer
+  editor
+  admin
+  owner
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+enum Gateway {
+  STRIPE
+  RAZORPAY
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TicketStatus {
+  active
+  used
+  cancelled
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  expired
+}
+
+enum WebhookStatus {
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model User {
+  id                   String               @id @default(uuid()) @db.Uuid
+  name                 String
+  email                String               @unique // store lowercased+trimmed in code
+  password             String
+  role                 UserRole             @default(customer)
+  isVerified           Boolean              @default(false)
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  verifyToken          String?
+  verifyTokenExpires   DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  memberships          OrganizationMember[]
+  orders               Order[]
+  tickets              Ticket[]
+  refreshTokens        RefreshToken[]
+  invitesSent          Invite[]
+}
+
+model Organization {
+  id                     String               @id @default(uuid()) @db.Uuid
+  name                   String               @unique
+  logoUrl                String?
+  primaryColor           String?
+  payoutDetailsEncrypted String?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  members                OrganizationMember[]
+  events                 Event[]
+  tiers                  TicketTier[]
+  orders                 Order[]
+  tickets                Ticket[]
+  payments               Payment[]
+  refunds                Refund[]
+  invites                Invite[]
+}
+
+model OrganizationMember {
+  organizationId String       @db.Uuid
+  userId         String       @db.Uuid
+  role           OrgRole
+  joinedAt       DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([userId])
+}
+
+model Event {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  title          String
+  description    String?
+  venue          String?
+  startDate      DateTime
+  endDate        DateTime?
+  status         EventStatus  @default(DRAFT)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  tiers          TicketTier[]
+  orders         Order[]
+  tickets        Ticket[]
+
+  @@index([organizationId])
+  @@index([startDate])
+}
+
+model TicketTier {
+  id             String       @id @default(uuid()) @db.Uuid
+  eventId        String       @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  priceMinor     Int
+  quantityTotal  Int
+  quantitySold   Int          @default(0)
+  salesStart     DateTime?
+  salesEnd       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  event          Event        @relation(fields: [eventId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  orderItems     OrderItem[]
+
+  @@index([eventId, organizationId])
+}
+
+model Order {
+  id               String        @id @default(uuid()) @db.Uuid
+  userId           String        @db.Uuid
+  organizationId   String        @db.Uuid
+  eventId          String        @db.Uuid
+  currency         String        @default("INR")
+  subtotalMinor    Int
+  feesMinor        Int           @default(0)
+  totalAmountMinor Int
+  paymentStatus    PaymentStatus @default(PENDING)
+  expiresAt        DateTime
+  idempotencyKey   String
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  user             User          @relation(fields: [userId], references: [id])
+  organization     Organization  @relation(fields: [organizationId], references: [id])
+  event            Event         @relation(fields: [eventId], references: [id])
+  items            OrderItem[]
+  tickets          Ticket[]
+  payments         Payment[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([organizationId])
+  @@index([eventId])
+  @@index([paymentStatus, expiresAt])
+}
+
+model OrderItem {
+  id             String     @id @default(uuid()) @db.Uuid
+  orderId        String     @db.Uuid
+  eventId        String     @db.Uuid
+  ticketTierId   String     @db.Uuid
+  tierName       String
+  quantity       Int
+  unitPriceMinor Int
+  subtotalMinor  Int
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketTier     TicketTier @relation(fields: [ticketTierId], references: [id])
+
+  @@index([orderId])
+}
+
+model Ticket {
+  id             String       @id @default(uuid()) @db.Uuid
+  orderId        String       @db.Uuid
+  eventId        String       @db.Uuid
+  organizationId String       @db.Uuid
+  ownerUserId    String       @db.Uuid
+  qrCode         String       @unique
+  status         TicketStatus @default(active)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  order          Order        @relation(fields: [orderId], references: [id])
+  event          Event        @relation(fields: [eventId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  owner          User         @relation(fields: [ownerUserId], references: [id])
+
+  @@index([orderId])
+  @@index([eventId])
+  @@index([ownerUserId])
+}
+
+model Payment {
+  id              String              @id @default(uuid()) @db.Uuid
+  organizationId  String              @db.Uuid
+  orderId         String              @db.Uuid
+  gateway          Gateway?
+  gatewayOrderId   String              @unique // Razorpay order id (order_...)
+  gatewayPaymentId String?             @unique // Razorpay payment id (pay_...), set once paid; needed for refunds
+  providerEventId  String?             @unique // Postgres allows many NULLs → same as sparse
+  status           PaymentRecordStatus @default(PENDING)
+  amountMinor      Int
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  organization     Organization        @relation(fields: [organizationId], references: [id])
+  order            Order               @relation(fields: [orderId], references: [id])
+  refunds          Refund[]
+
+  @@index([orderId])
+}
+
+model Refund {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  paymentId      String       @db.Uuid
+  amountMinor    Int
+  reason         String?
+  status         RefundStatus @default(PENDING)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  payment        Payment      @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+}
+
+model RefreshToken {
+  id         String    @id // JWT jti
+  userId     String    @db.Uuid
+  revoked    Boolean   @default(false)
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Invite {
+  id             String       @id @default(uuid()) @db.Uuid
+  email          String
+  organizationId String       @db.Uuid
+  role           OrgRole
+  tokenHash      String       @unique
+  status         InviteStatus @default(pending)
+  expiresAt      DateTime
+  invitedById    String?      @db.Uuid
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  invitedBy      User?        @relation(fields: [invitedById], references: [id])
+}
+
+model WebhookEvent {
+  id              String        @id @default(uuid()) @db.Uuid
+  gateway         Gateway
+  providerEventId String
+  eventType       String
+  status          WebhookStatus @default(PROCESSING)
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([gateway, providerEventId])
+}

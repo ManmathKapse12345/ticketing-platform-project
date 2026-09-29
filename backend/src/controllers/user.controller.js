@@ -10,7 +10,7 @@ const updateProfileRequest = async (req,res,next) => {
                 errors:parsed.error.flatten()
             });
         }
-        const updatedUser = await updateProfile(req.user._id,parsed.data);
+        const updatedUser = await updateProfile(req.user.id,parsed.data);
         return res.status(200).json({ user: updatedUser });
     }catch (err) {
       if (err instanceof ApiError) {
@@ -22,14 +22,9 @@ const updateProfileRequest = async (req,res,next) => {
 
 const getMe = async (req,res,next) => {
     try{
-        const user = await getUserById(req.user._id);
-        const safeUser = user.toObject();
-        delete safeUser.password;
-        delete safeUser.verifyToken;
-        delete safeUser.verifyTokenExpires;
-        delete safeUser.resetPasswordToken;
-        delete safeUser.resetPasswordExpires;
-        return res.status(200).json({ user: safeUser });
+        // password and token fields are already omitted by the Prisma client (config/prisma.js)
+        const user = await getUserById(req.user.id);
+        return res.status(200).json({ user });
     }catch(err){
         if (err instanceof ApiError) {
             return res.status(err.statusCode).json({ error: err.message });
@@ -46,7 +41,7 @@ const changePasswordRequest = async (req,res,next) => {
                 errors:parsed.error.flatten()
             });
         }
-        await changePassword(req.user._id,parsed.data);
+        await changePassword(req.user.id,parsed.data);
         return res.status(200).json({ message: "Password changed successfully" });
     }catch(err){
         if (err instanceof ApiError) {

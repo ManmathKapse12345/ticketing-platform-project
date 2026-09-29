@@ -1,0 +1,13 @@
+node_modules
+# Keep environment variables out of version control
+.env
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+backend/.env.example

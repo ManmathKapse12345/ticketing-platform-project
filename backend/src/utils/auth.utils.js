@@ -8,9 +8,9 @@ const generateToken = async (user) => {
     const jti = crypto.randomUUID();
     const accessToken = jwt.sign(
         {
-            sub:user._id,
+            sub:user.id,
             role:user.role,
-            // comp = organization?._id,
+            // comp = organization?.id,
             jti
         },
         process.env.JWT_ACCESS_SECRET,
@@ -20,9 +20,9 @@ const generateToken = async (user) => {
     );
     const refreshToken = jwt.sign(
         {
-            sub:user._id,
+            sub:user.id,
             role:user.role,
-            // comp = organization?._id,
+            // comp = organization?.id,
             jti
         },
         process.env.JWT_REFRESH_SECRET,

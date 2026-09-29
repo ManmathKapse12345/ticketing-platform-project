@@ -7,10 +7,9 @@ const {
   userForgotPassword,
   userResetPassword,
   verifyEmail,
+  saveRefreshToken,
 } = require("../services/auth.service.js");
 const { generateToken, sendEmail } = require("../utils/auth.utils.js");
-const RefreshToken = require("../models/0010_refresh_token.js");
-const User = require("../models/0001_user.model.js");
 const ApiError = require("../utils/apiError.js");
 
 const register = async (req, res, next) => {
@@ -32,12 +31,7 @@ const register = async (req, res, next) => {
         "customer",
       );
       const { accessToken, refreshToken, jti } = await generateToken(user);
-      await RefreshToken.create({
-        _id: jti,
-        userId: user._id,
-        revoked: false,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      });
+      await saveRefreshToken(jti, user.id);
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -58,7 +52,7 @@ const register = async (req, res, next) => {
         message:
           "Registration successful and your Account is created. Check your email to verify.",
         user: {
-          id: user._id,
+          id: user.id,
           email: user.email,
         },
         accessToken: accessToken,
@@ -75,14 +69,8 @@ const register = async (req, res, next) => {
       );
       const { accessToken, refreshToken, jti } = await generateToken(
         user,
-        organization,
       );
-      await RefreshToken.create({
-        _id: jti,
-        userId: user._id,
-        revoked: false,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      });
+      await saveRefreshToken(jti, user.id);
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -103,7 +91,7 @@ const register = async (req, res, next) => {
         message:
           "Registration successful and your Account is created. Check your email to verify.",
         user: {
-          id: user._id,
+          id: user.id,
           email: user.email,
         },
         accessToken: accessToken,
@@ -125,12 +113,7 @@ const login = async (req, res, next) => {
     const { email, password } = req.body;
     const user = await loginUser(email, password);
     const { accessToken, refreshToken, jti } = await generateToken(user);
-    await RefreshToken.create({
-      _id: jti,
-      userId: user._id,
-      revoked: false,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    });
+    await saveRefreshToken(jti, user.id);
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
@@ -142,7 +125,7 @@ const login = async (req, res, next) => {
       success: true,
       message: "Login successful",
       user: {
-        id: user._id,
+        id: user.id,
         email: user.email,
       },
       accessToken: accessToken,

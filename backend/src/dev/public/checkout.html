@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Razorpay Test Checkout</title>
+  <link rel="stylesheet" href="/dev/checkout.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Razorpay test checkout</h1>
+      <p class="muted">Dev-only page. Run <code>npm run seed:dev</code> first. Nothing here is charged — the backend uses your <code>rzp_test_</code> keys.</p>
+    </header>
+
+    <section class="card" id="step-login">
+      <h2><span class="num">1</span> Log in as a customer</h2>
+      <form id="login-form" class="row">
+        <input id="email" type="email" value="customer@test.local" required aria-label="Email">
+        <input id="password" type="password" value="Password123!" required aria-label="Password">
+        <button type="submit">Log in</button>
+      </form>
+      <p id="login-status" class="status"></p>
+    </section>
+
+    <section class="card" id="step-buy" hidden>
+      <h2><span class="num">2</span> Choose tickets</h2>
+      <div class="row">
+        <select id="event" aria-label="Event"></select>
+        <select id="tier" aria-label="Ticket tier"></select>
+        <input id="quantity" type="number" min="1" max="10" value="1" aria-label="Quantity">
+      </div>
+      <button id="pay">Create order &amp; pay</button>
+      <p id="buy-status" class="status"></p>
+    </section>
+
+    <section class="card" id="step-result" hidden>
+      <h2><span class="num">3</span> Result</h2>
+      <dl id="result"></dl>
+      <div id="tickets"></div>
+    </section>
+
+    <section class="card">
+      <h2>Test payment details</h2>
+      <ul class="muted">
+        <li>Card: <code>4111 1111 1111 1111</code> · any future expiry · any CVV · OTP page: click <b>Success</b></li>
+        <li>UPI: <code>success@razorpay</code> (or <code>failure@razorpay</code> to test a failed payment)</li>
+        <li>Netbanking: pick any bank, then click <b>Success</b></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Log</h2>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script src="/dev/checkout.js"></script>
+</body>
+</html>

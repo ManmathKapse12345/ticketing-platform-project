@@ -11,3 +11,14 @@ backend/coverage/
 
 *.md
 *.mmd
+/plans
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+!backend/.env.example

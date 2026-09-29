@@ -1,20 +1,22 @@
 // backend/src/services/refund.service.js
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-const Order = require("../models/0006_order.model.js");
-const Payment = require("../models/0008_payment.model.js");
-const Refund = require("../models/0009_refund.model.js");
-const Ticket = require("../models/0007_ticket.model.js");
+const getRazorpay = require("../config/razorpay.js");
+const prisma = require("../config/prisma.js");
 const ApiError = require("../utils/apiError.js");
 
 const createRefund = async (organizationId, orderId, amountMinor, reason) => {
-  const order = await Order.findOne({ _id: orderId, organizationId });
+  const order = await prisma.order.findFirst({ where: { id: orderId, organizationId } });
   if (!order) throw new ApiError(404, "Order not found");
   if (order.paymentStatus !== "PAID") {
     throw new ApiError(409, `Order is ${order.paymentStatus.toLowerCase()}, nothing to refund`);
   }
 
-  const payment = await Payment.findOne({ orderId: order._id, status: "SUCCESS" });
+  const payment = await prisma.payment.findFirst({
+    where: { orderId: order.id, status: "SUCCESS" },
+  });
   if (!payment) throw new ApiError(404, "No successful payment found for this order");
+  if (!payment.gatewayPaymentId) {
+    throw new ApiError(409, "Payment has no gateway payment id to refund against");
+  }
 
   const refundAmount = amountMinor ?? payment.amountMinor;
   if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0 || refundAmount > payment.amountMinor) {
@@ -22,46 +24,53 @@ const createRefund = async (organizationId, orderId, amountMinor, reason) => {
   }
 
   // Atomic claim: stops two concurrent refund requests from both succeeding.
-  const claimedPayment = await Payment.findOneAndUpdate(
-    { _id: payment._id, status: "SUCCESS" },
-    { $set: { status: "REFUNDED" } },
-    { new: true },
-  );
-  if (!claimedPayment) throw new ApiError(409, "Payment was already refunded");
+  const { count } = await prisma.payment.updateMany({
+    where: { id: payment.id, status: "SUCCESS" },
+    data: { status: "REFUNDED" },
+  });
+  if (count === 0) throw new ApiError(409, "Payment was already refunded");
 
-  const refund = await Refund.create({
-    organizationId,
-    paymentId: payment._id,
-    amountMinor: refundAmount,
-    reason,
-    status: "PENDING",
+  const refund = await prisma.refund.create({
+    data: {
+      organizationId,
+      paymentId: payment.id,
+      amountMinor: refundAmount,
+      reason,
+      status: "PENDING",
+    },
   });
 
   try {
-    await stripe.refunds.create({
-      payment_intent: payment.paymentIntentId,
+    await getRazorpay().payments.refund(payment.gatewayPaymentId, {
       amount: refundAmount,
+      notes: { orderId: order.id, refundId: refund.id },
     });
   } catch (error) {
     // Roll back — don't leave the payment stuck REFUNDED with no actual gateway refund.
-    await Payment.updateOne({ _id: payment._id }, { $set: { status: "SUCCESS" } });
-    await Refund.updateOne({ _id: refund._id }, { $set: { status: "REJECTED" } });
+    await prisma.payment.update({ where: { id: payment.id }, data: { status: "SUCCESS" } });
+    await prisma.refund.update({ where: { id: refund.id }, data: { status: "REJECTED" } });
     throw new ApiError(502, "Refund failed at payment gateway");
   }
 
-  refund.status = "APPROVED";
-  await refund.save();
+  const approvedRefund = await prisma.refund.update({
+    where: { id: refund.id },
+    data: { status: "APPROVED" },
+  });
 
   if (refundAmount === payment.amountMinor) {
-    order.paymentStatus = "REFUNDED";
-    await order.save();
-    await Ticket.updateMany(
-      { orderId: order._id, status: "active" },
-      { $set: { status: "cancelled" } },
-    );
+    await prisma.$transaction([
+      prisma.order.update({
+        where: { id: order.id },
+        data: { paymentStatus: "REFUNDED" },
+      }),
+      prisma.ticket.updateMany({
+        where: { orderId: order.id, status: "active" },
+        data: { status: "cancelled" },
+      }),
+    ]);
   }
 
-  return refund;
+  return approvedRefund;
 };
 
 module.exports = { createRefund };
