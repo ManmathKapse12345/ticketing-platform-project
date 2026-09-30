@@ -11,7 +11,8 @@ process.env.RAZORPAY_KEY_SECRET = "rzp_test_secret";
 const crypto = require("crypto");
 const prisma = require("../src/config/prisma.js");
 const dbHandler = require("./dbHandler");
-const { makeUser, makeTier } = require("./factories");
+const { makeUser, makeTier, makeEvent } = require("./factories");
+const { verifyTicketQr } = require("../src/utils/qr.utils.js");
 const {
   createOrder,
   createCheckout,
@@ -139,6 +140,23 @@ describe("createOrder", () => {
     const updatedTier = await findTier(tier.id);
     expect(updatedTier.quantitySold).toBe(2); // one reservation survives, the loser's was rolled back
   });
+  
+  it.each([
+    ["a draft event", { status: "DRAFT" }, 404],
+    ["a cancelled event", { status: "CANCELLED" }, 409],
+    ["an event that already started", { startDate: new Date(Date.now() - 60*1000) }, 400]
+  ])("rejects orders for %s and reserves no seats", async (_label, eventOverrides, statusCode) => {
+    const event = await makeEvent(eventOverrides);
+    const tier = await makeTier({ eventId: event.id });
+    const { id: userId } = await makeUser();
+
+    await expect(
+      createOrder(userId, tier.organizationId, tier.eventId,
+        [{ ticketTier: tier.id, quantity: 1 }], "idem-event-check"),
+    ).rejects.toMatchObject({ statusCode });
+
+    expect((await findTier(tier.id)).quantitySold).toBe(0);
+  });
 });
 
 const signCheckout = (razorpayOrderId, razorpayPaymentId) =>
@@ -264,3 +282,38 @@ describe("verifyCheckoutPayment", () => {
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
+
+describe("ticket QR expiry", () => {
+  const payFor = async (eventOverrides) => {
+    const event = await makeEvent(eventOverrides);
+    const tier = await makeTier({ eventId: event.id });
+    const { id: userId } = await makeUser();
+    const order = await createOrder(
+      userId, tier.organizationId, tier.eventId,
+      [{ ticketTier: tier.id, quantity: 1 }], `idem-${crypto.randomUUID()}`,
+    );
+    const { razorpayOrderId } = await createCheckout(order.id, userId);
+    const razorpayPaymentId = `pay_${crypto.randomUUID()}`;
+    await verifyCheckoutPayment(order.id, userId, {
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature: signCheckout(razorpayOrderId, razorpayPaymentId),
+    });
+    const ticket = await prisma.ticket.findFirst({ where: { orderId: order.id } });
+    return { event, qr: verifyTicketQr(ticket.qrCode) };
+  };
+
+  it("expires the QR at the event's endDate", async () => {
+    const endDate = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000);
+    const { qr } = await payFor({ endDate });
+    expect(new Date(qr.expiresAt)).toEqual(endDate);
+  });
+
+  it("expires the QR 12h after start when the event has no endDate", async () => {
+    const { event, qr } = await payFor({});
+    expect(new Date(qr.expiresAt)).toEqual(
+      new Date(event.startDate.getTime() + 12 * 60 * 60 * 1000),
+    );
+  });
+});
+

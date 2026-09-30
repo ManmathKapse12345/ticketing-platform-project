@@ -1,6 +1,8 @@
 const prisma = require("../config/prisma.js");
 const ApiError = require("../utils/apiError.js");
 const { findEventForOrganization } = require("./ownership.service.js");
+const { createRefund } = require("./refund.service.js");
+const { cancelPendingOrder } = require("./order.service.js");
 
 const createEvent = async (organizationId, eventData) =>
   prisma.event.create({
@@ -39,7 +41,41 @@ const updateEvent = async (eventId, organizationId, eventData) => {
   return updateEventForOrganization(eventId, organizationId, safeEventData);
 };
 
-const cancelEvent = (eventId, organizationId) =>
-  updateEventForOrganization(eventId, organizationId, { status: "CANCELLED" });
+const cancelEvent = async (eventId, organizationId) => {
+  const event = await updateEventForOrganization(eventId, organizationId, { 
+    status: "CANCELLED", 
+  });
+
+  await prisma.ticket.updateMany({
+    where: { eventId, organizationId, status: "active" },
+    data: { status: "cancelled" },
+  });
+
+  const pendingOrders = await prisma.order.findMany({
+    where: { eventId, organizationId, paymentStatus: "PENDING" },
+    select: { id: true },
+  });
+  for(const { id } of pendingOrders) {
+    await cancelPendingOrder(id);
+  }
+
+  const paidOrders = await prisma.order.findMany({
+    where: { eventId, organizationId, paymentStatus: "PAID" },
+    select: { id: true },
+  });
+  const failed = [];
+  for (const { id } of paidOrders) {
+    try {
+      await createRefund(organizationId, id, undefined, "Event cancelled");
+    } catch (error) {
+      failed.push({ orderId: id, message: error.message });
+    }
+  }
+
+  return {
+    event,
+    refunds: { requested: paidOrders.length - failed.length, failed },
+  };
+};
 
 module.exports = { createEvent, listEvents, getEvent, updateEvent, cancelEvent };

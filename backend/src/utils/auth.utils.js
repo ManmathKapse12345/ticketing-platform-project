@@ -3,6 +3,17 @@ const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 
+const sendVerificationEmail = (to, verifyUrl) => 
+  sendEmail(
+    to,
+    "Verify your email",
+    `
+      <p>Click below to verify your account:</p>
+      <a href="${verifyUrl}">${verifyUrl}</a>
+      <p>This link expires in 24 hours.</p>
+    `,
+  );
+
 
 const generateToken = async (user) => {
     const jti = crypto.randomUUID();
@@ -70,5 +81,6 @@ module.exports = {
     hashPassword,
     generateToken,
     sendEmail,
-    generateVerificationToken
+    generateVerificationToken,
+    sendVerificationEmail
 };

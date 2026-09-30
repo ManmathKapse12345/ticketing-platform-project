@@ -24,6 +24,7 @@ const makeEvent = async (overrides = {}) => {
   return prisma.event.create({
     data: {
       title: "Test Event",
+      status: "PUBLISHED",
       startDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       ...overrides,
       organizationId,
@@ -67,4 +68,30 @@ const makeOrder = async (overrides = {}) => {
   });
 };
 
-module.exports = { makeUser, makeOrganization, makeEvent, makeTier, makeOrder };
+// 2 seats at 1000 each, paid, with tickets issued.
+const makePaidOrder = async ({ eventId } = {}) => {
+  const tier = await makeTier({ quantitySold: 2, ...(eventId && { eventId }) });
+  const { id: userId } = await makeUser();
+  const order = await prisma.order.create({
+    data: {
+      userId, organizationId: tier.organizationId, eventId: tier.eventId,
+      subtotalMinor: 2000, totalAmountMinor: 2000, paymentStatus: "PAID",
+      expiresAt: new Date(), idempotencyKey: crypto.randomUUID(),
+      items: { create: [{ eventId: tier.eventId, ticketTierId: tier.id, tierName: tier.name,
+        quantity: 2, unitPriceMinor: 1000, subtotalMinor: 2000 }] },
+    },
+  });
+  const payment = await prisma.payment.create({
+    data: { organizationId: tier.organizationId, orderId: order.id, gateway: "RAZORPAY",
+      gatewayOrderId: `order_${crypto.randomUUID()}`, gatewayPaymentId: `pay_${crypto.randomUUID()}`,
+      status: "SUCCESS", amountMinor: 2000 },
+  });
+  await prisma.ticket.createMany({
+    data: [1, 2].map(() => ({ orderId: order.id, eventId: tier.eventId,
+      organizationId: tier.organizationId, ownerUserId: userId, qrCode: `qr-${crypto.randomUUID()}` })),
+  });
+  return { order, tier, payment };
+};
+
+module.exports = { makeUser, makeOrganization, makeEvent, makeTier, makeOrder, makePaidOrder };
+

@@ -226,15 +226,16 @@ model Ticket {
 }
 
 model Payment {
-  id              String              @id @default(uuid()) @db.Uuid
-  organizationId  String              @db.Uuid
-  orderId         String              @db.Uuid
+  id               String              @id @default(uuid()) @db.Uuid
+  organizationId   String              @db.Uuid
+  orderId          String              @db.Uuid
   gateway          Gateway?
   gatewayOrderId   String              @unique // Razorpay order id (order_...)
   gatewayPaymentId String?             @unique // Razorpay payment id (pay_...), set once paid; needed for refunds
   providerEventId  String?             @unique // Postgres allows many NULLs → same as sparse
   status           PaymentRecordStatus @default(PENDING)
   amountMinor      Int
+  refundedMinor    Int                 @default(0)
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   organization     Organization        @relation(fields: [organizationId], references: [id])
@@ -244,11 +245,13 @@ model Payment {
   @@index([orderId])
 }
 
+
 model Refund {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
   paymentId      String       @db.Uuid
   amountMinor    Int
+  gatewayRefundId  String?       @unique // Razorpay refund id
   reason         String?
   status         RefundStatus @default(PENDING)
   createdAt      DateTime     @default(now())

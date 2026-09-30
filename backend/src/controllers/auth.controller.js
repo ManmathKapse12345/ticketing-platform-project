@@ -8,8 +8,10 @@ const {
   userResetPassword,
   verifyEmail,
   saveRefreshToken,
+  resendVerification,
 } = require("../services/auth.service.js");
-const { generateToken, sendEmail } = require("../utils/auth.utils.js");
+
+const { generateToken, sendEmail, sendVerificationEmail } = require("../utils/auth.utils.js");
 const ApiError = require("../utils/apiError.js");
 
 const register = async (req, res, next) => {
@@ -38,15 +40,7 @@ const register = async (req, res, next) => {
         sameSite: "strict",
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
-      await sendEmail(
-        user.email,
-        "Verify your email",
-        `
-      <p>Click below to verify your account:</p>
-      <a href="${verifyUrl}">${verifyUrl}</a>
-      <p>This link expires in 24 hours.</p>
-      `,
-      );
+      await sendVerificationEmail(user.email, verifyUrl);
       res.status(201).json({
         success: true,
         message:
@@ -77,15 +71,7 @@ const register = async (req, res, next) => {
         sameSite: "strict",
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
-      await sendEmail(
-        user.email,
-        "Verify your email",
-        `
-      <p>Click below to verify your account:</p>
-      <a href="${verifyUrl}">${verifyUrl}</a>
-      <p>This link expires in 24 hours.</p>
-      `,
-      );
+      await sendVerificationEmail(user.email, verifyUrl);
       res.status(201).json({
         success: true,
         message:
@@ -222,6 +208,21 @@ const emailVerification = async (req, res, next) => {
   });
 };
 
+const resendVerificationEmail = async (req, res, next) => {
+  try {
+    const { user, verifyUrl } = await resendVerification(req.body.email);
+    if (user) await sendVerificationEmail(user.email, verifyUrl);
+
+    return res.status(200).json({
+      success: true,
+      message: "If that account exists and isn't verified yet, a new verification link has been sent.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 module.exports = {
   register,
   login,
@@ -230,4 +231,5 @@ module.exports = {
   forgotPassword,
   resetPassword,
   emailVerification,
+  resendVerificationEmail
 };

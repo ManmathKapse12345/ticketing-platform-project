@@ -7,6 +7,12 @@ const { verifyPaymentSignature } = require("../utils/razorpay.utils.js");
 const getRazorpay = require("../config/razorpay.js");
 const prisma = require("../config/prisma.js");
 
+const TICKET_VALIDITY_WITHOUT_END_MS = 12*60*60*1000;
+
+const ticketExpiryFor = (event) =>
+  event.endDate ??
+  new Date(event.startDate.getTime() + TICKET_VALIDITY_WITHOUT_END_MS);
+
 const createOrder = async (
   userId,
   organizationId,
@@ -27,6 +33,21 @@ const createOrder = async (
     // Everything below runs in one transaction: if any item is unavailable, or the
     // order insert fails, every seat reserved so far is rolled back automatically.
     return await prisma.$transaction(async (tx) => {
+      const now = new Date();
+
+      const event = await tx.event.findFirst({
+        where: { id: eventId, organizationId },
+      });
+      if(!event || event.status === "DRAFT"){
+        throw new ApiError(404, "Event not found");
+      }
+      if(event.status === "CANCELLED"){
+        throw new ApiError(409, "This event has been cancelled");
+      }
+      if(event.startDate <= now) {
+        throw new ApiError(400, "Ticket sales for this event have closed");
+      }
+
       const items = [];
 
       for (const { ticketTier, quantity } of requestedItems) {
@@ -39,7 +60,7 @@ const createOrder = async (
           throw new ApiError(404, "Ticket tier not found for this event");
         }
 
-        const now = new Date();
+        // const now = new Date();
         if (tier.salesStart && now < tier.salesStart) {
           throw new ApiError(400, `Sales for "${tier.name}" have not started yet`);
         }
@@ -272,8 +293,13 @@ const fulfillPaidOrder = async (gatewayOrderId, gatewayPaymentId, amountMinor) =
 
     const order = await tx.order.findUnique({
       where: { id: payment.orderId },
-      include: { items: true },
+      include: { 
+        items: true,
+        event: { select: { startDate: true, endDate: true } }, 
+      },
     });
+
+    const expiresAt = ticketExpiryFor(order.event);
 
     // The ticket id is generated up front because it's signed into its own QR code.
     const tickets = order.items.flatMap((item) =>
@@ -288,7 +314,7 @@ const fulfillPaidOrder = async (gatewayOrderId, gatewayPaymentId, amountMinor) =
           qrCode: signTicketQr({
             ticketId: id,
             eventId: item.eventId,
-            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // TODO: use event end date instead
+            expiresAt,
           }),
         };
       }),
@@ -299,10 +325,28 @@ const fulfillPaidOrder = async (gatewayOrderId, gatewayPaymentId, amountMinor) =
 };
 
 // payment.failed webhook: mark the attempt FAILED so the next checkout creates a fresh Razorpay order.
-const markPaymentFailed = (gatewayOrderId) =>
+const markPaymentFailed = (gatewayOrderId) => 
   prisma.payment.updateMany({
     where: { gatewayOrderId, status: "PENDING" },
     data: { status: "FAILED" },
+  });
+  
+
+const cancelPendingOrder = (orderId) => 
+  prisma.$transaction(async (tx) => {
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, paymentStatus: "PENDING" },
+      data: { paymentStatus: "CANCELLED" },
+    });
+    if(count === 0)  return;
+
+    const items = await tx.orderItem.findMany({ where: { orderId } });
+    for(const item of items) {
+      await tx.ticketTier.update({
+        where: { id: item.ticketTierId },
+        data: { quantitySold: { decrement: item.quantity } },
+      });
+    }
   });
 
 module.exports = {
@@ -317,4 +361,5 @@ module.exports = {
   markPaymentFailed,
   listOrganizationOrders,
   getOrganizationOrder,
+  cancelPendingOrder
 };

@@ -12,6 +12,34 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 60 * 1000;
+
+const resendVerification = async (email) => {
+  const user = await prisma.user.findUnique({
+    where: { email: normalizeEmail(email) },
+    omit: { verifyTokenExpires: false },
+  });
+
+  if (!user || user.isVerified) return { user: null };
+
+  // The current token was issued (expiry - TTL) ago; under a minute means we just sent one.
+  const issuedAt = user.verifyTokenExpires?.getTime() - VERIFY_TOKEN_TTL_MS;
+  if (issuedAt && Date.now() - issuedAt < RESEND_COOLDOWN_MS)
+    return { user: null };
+
+  const { rawToken, hashedToken } = generateVerificationToken();
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      verifyToken: hashedToken,
+      verifyTokenExpires: new Date(Date.now() + VERIFY_TOKEN_TTL_MS),
+    },
+  });
+
+  const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${rawToken}`;
+  return { user: updated, verifyUrl };
+};
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
 
@@ -40,7 +68,9 @@ const registerOwner = async (
     throw new ApiError(409, "Email already exists");
   }
 
-  const company = await prisma.organization.findUnique({ where: { name: companyName } });
+  const company = await prisma.organization.findUnique({
+    where: { name: companyName },
+  });
   if (company) {
     throw new ApiError(
       409,
@@ -60,7 +90,7 @@ const registerOwner = async (
           password: hashedPassword,
           role: "customer",
           verifyToken: hashedToken,
-          verifyTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          verifyTokenExpires: new Date(Date.now() + VERIFY_TOKEN_TTL_MS),
         },
       });
 
@@ -69,7 +99,9 @@ const registerOwner = async (
           name: companyName,
           logoUrl: branding?.logoUrl,
           primaryColor: branding?.primaryColor,
-          payoutDetailsEncrypted: payoutDetails ? encryptPayoutDetails(payoutDetails) : null,
+          payoutDetailsEncrypted: payoutDetails
+            ? encryptPayoutDetails(payoutDetails)
+            : null,
           members: { create: { userId: user.id, role } },
         },
       });
@@ -81,7 +113,8 @@ const registerOwner = async (
     return { user, organization, verifyUrl };
   } catch (err) {
     // A concurrent registration took the same email or company name
-    if (isUniqueViolation(err)) throw new ApiError(409, "Email or company already exists");
+    if (isUniqueViolation(err))
+      throw new ApiError(409, "Email or company already exists");
     throw err;
   }
 };
@@ -105,7 +138,7 @@ const registerCustomer = async (name, email, password, role) => {
         password: hashedPassword,
         role,
         verifyToken: hashedToken,
-        verifyTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        verifyTokenExpires: new Date(Date.now() + VERIFY_TOKEN_TTL_MS),
       },
     });
 
@@ -149,7 +182,9 @@ const rotateRefreshToken = async (refreshToken) => {
     throw new ApiError(401, "Invalid or expired refresh token");
   }
 
-  const stored = await prisma.refreshToken.findUnique({ where: { id: payload.jti } });
+  const stored = await prisma.refreshToken.findUnique({
+    where: { id: payload.jti },
+  });
   if (!stored || stored.userId !== payload.sub) {
     throw new ApiError(401, "Invalid or expired refresh token");
   }
@@ -205,7 +240,9 @@ const userForgotPassword = async (email) => {
     throw new ApiError(400, "Email is required");
   }
 
-  const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
+  const user = await prisma.user.findUnique({
+    where: { email: normalizeEmail(email) },
+  });
 
   if (!user) {
     return { user: null };
@@ -258,6 +295,10 @@ const userResetPassword = async (token, newPassword) => {
       resetPasswordExpires: null,
     },
   });
+  await prisma.refreshToken.updateMany({
+    where: { userId: user.id, revoked: false },
+    data: { revoked: true, revokedAt: new Date() },
+  });
 
   return { user: updated };
 };
@@ -301,4 +342,5 @@ module.exports = {
   verifyEmail,
   saveRefreshToken,
   normalizeEmail,
+  resendVerification,
 };

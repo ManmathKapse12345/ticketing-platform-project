@@ -3,11 +3,16 @@ const {
   getPublishedEvent,
   listPublicTicketTiers,
 } = require("../services/publicEvent.service.js");
+const listPublishedEventsSchema = require("../validators/publicEvent.validator.js");
 
 const listPublishedEventsRequest = async (req, res, next) => {
   try {
-    const events = await listPublishedEvents();
-    return res.status(200).json({ success: true, events });
+    const parsed = listPublishedEventsSchema.safeParse(req.query);
+    if(!parsed.success){
+      return res.status(400).json({ success: false, errors: parsed.error.flatten() });
+    }
+    const { events, pagination } = await listPublishedEvents(parsed.data);
+    return res.status(200).json({ success: true, events, pagination });
   } catch (error) {
     next(error);
   }

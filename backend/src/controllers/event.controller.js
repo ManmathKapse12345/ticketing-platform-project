@@ -60,12 +60,13 @@ const updateEventRequest = async (req, res, next) => {
 
 const cancelEventRequest = async (req, res, next) => {
   try {
-    const event = await cancelEvent(req.params.eventId, req.params.organizationId);
-    return res.status(200).json({ success: true, event });
+    const { event, refunds } = await cancelEvent(req.params.eventId, req.params.organizationId);
+    return res.status(200).json({ success: true, event, refunds });
   } catch (error) {
     next(error);
   }
 };
+
 
 module.exports = {
   createEventRequest,

@@ -1,3 +1,19 @@
+const { z } = require("zod");
+
+const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
+// Verify and reset tokens are crypto.randomBytes(32) as hex.
+const token = z.string().regex(/^[a-f0-9]{64}$/, "Invalid or expired token");
+// bcrypt ignores anything past 72 bytes.
+const password = z.string().min(8, "Password must be at least 8 characters").max(72);
+
+const forgotPasswordSchema = { body: z.object({ email }) };
+const resendVerificationSchema = { body: z.object({ email }) };
+const verifyEmailSchema = { body: z.object({ token }) };
+const resetPasswordSchema = {
+  params: z.object({ token }),
+  body: z.object({ newPassword: password }),
+};
+
 const validateRegister = (data) => {
   const { name, email, password, role, companyName, branding, payoutDetails } =
     data;
@@ -34,4 +50,8 @@ const validateLogin = (data) => {
 module.exports = {
   validateRegister,
   validateLogin,
+  forgotPasswordSchema,
+  resendVerificationSchema,
+  verifyEmailSchema,
+  resetPasswordSchema,
 };
