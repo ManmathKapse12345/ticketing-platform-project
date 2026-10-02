@@ -39,7 +39,6 @@ enum PaymentStatus {
 }
 
 enum Gateway {
-  STRIPE
   RAZORPAY
 }
 
@@ -68,6 +67,12 @@ enum InviteStatus {
   expired
 }
 
+enum PayoutStatus {
+  REQUESTED
+  PAID
+  CANCELLED
+}
+
 enum WebhookStatus {
   PROCESSING
   PROCESSED
@@ -92,6 +97,7 @@ model User {
   tickets              Ticket[]
   refreshTokens        RefreshToken[]
   invitesSent          Invite[]
+  payoutsRequested     Payout[]
 }
 
 model Organization {
@@ -100,9 +106,11 @@ model Organization {
   logoUrl                String?
   primaryColor           String?
   payoutDetailsEncrypted String?
+  verifiedAt             DateTime? // set by a platform admin; required before payouts
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
   members                OrganizationMember[]
+  payouts                Payout[]
   events                 Event[]
   tiers                  TicketTier[]
   orders                 Order[]
@@ -133,6 +141,7 @@ model Event {
   startDate      DateTime
   endDate        DateTime?
   status         EventStatus  @default(DRAFT)
+  viewCount      Int          @default(0)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -159,6 +168,7 @@ model TicketTier {
   event          Event        @relation(fields: [eventId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
   orderItems     OrderItem[]
+  tickets        Ticket[]
 
   @@index([eventId, organizationId])
 }
@@ -173,6 +183,8 @@ model Order {
   feesMinor        Int           @default(0)
   totalAmountMinor Int
   paymentStatus    PaymentStatus @default(PENDING)
+  paidAt           DateTime?
+  ticketsEmailedAt DateTime?
   expiresAt        DateTime
   idempotencyKey   String
   createdAt        DateTime      @default(now())
@@ -211,10 +223,12 @@ model Ticket {
   eventId        String       @db.Uuid
   organizationId String       @db.Uuid
   ownerUserId    String       @db.Uuid
+  ticketTierId   String?      @db.Uuid // null for tickets issued before tiers were recorded
   qrCode         String       @unique
   status         TicketStatus @default(active)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  ticketTier     TicketTier?  @relation(fields: [ticketTierId], references: [id])
   order          Order        @relation(fields: [orderId], references: [id])
   event          Event        @relation(fields: [eventId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -260,6 +274,26 @@ model Refund {
   payment        Payment      @relation(fields: [paymentId], references: [id])
 
   @@index([paymentId])
+}
+
+// Payout ledger. Money is moved outside the platform (bank transfer); a platform
+// admin marks the payout PAID with the transfer reference.
+model Payout {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  amountMinor    Int
+  currency       String       @default("INR")
+  status         PayoutStatus @default(REQUESTED)
+  requestedById  String       @db.Uuid
+  reference      String? // bank/UTR reference, set when PAID
+  note           String?
+  processedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  requestedBy    User         @relation(fields: [requestedById], references: [id])
+
+  @@index([organizationId, status])
 }
 
 model RefreshToken {

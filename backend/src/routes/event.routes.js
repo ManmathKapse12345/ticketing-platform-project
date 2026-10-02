@@ -21,6 +21,7 @@ const {
   checkInTicketRequest,
   listEventTicketsRequest,
 } = require("../controllers/ticket.controller.js");
+const { getEventAnalyticsRequest } = require("../controllers/analytics.controller.js");
 
 const router = express.Router({ mergeParams: true });
 
@@ -96,6 +97,14 @@ router.get(
   validateUuid("eventId"),
   requireOrganizationRole(...ANY_MEMBER),
   listEventTicketsRequest,
+);
+
+// Revenue is financial data: same ADMIN_UP rule as the organization's order list.
+router.get(
+  "/:eventId/analytics",
+  validateUuid("eventId"),
+  requireOrganizationRole(...ADMIN_UP),
+  getEventAnalyticsRequest,
 );
 
 module.exports = router;

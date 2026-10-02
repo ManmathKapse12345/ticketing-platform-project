@@ -69,13 +69,13 @@ const makeOrder = async (overrides = {}) => {
 };
 
 // 2 seats at 1000 each, paid, with tickets issued.
-const makePaidOrder = async ({ eventId } = {}) => {
+const makePaidOrder = async ({ eventId, paidAt = new Date() } = {}) => {
   const tier = await makeTier({ quantitySold: 2, ...(eventId && { eventId }) });
   const { id: userId } = await makeUser();
   const order = await prisma.order.create({
     data: {
       userId, organizationId: tier.organizationId, eventId: tier.eventId,
-      subtotalMinor: 2000, totalAmountMinor: 2000, paymentStatus: "PAID",
+      subtotalMinor: 2000, totalAmountMinor: 2000, paymentStatus: "PAID", paidAt,
       expiresAt: new Date(), idempotencyKey: crypto.randomUUID(),
       items: { create: [{ eventId: tier.eventId, ticketTierId: tier.id, tierName: tier.name,
         quantity: 2, unitPriceMinor: 1000, subtotalMinor: 2000 }] },

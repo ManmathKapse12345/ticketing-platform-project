@@ -1,13 +1,21 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Multi-tenant event ticketing API: Razorpay payments, signed QR tickets, BullMQ ticket delivery",
   "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "worker": "node worker.js",
+    "worker:dev": "nodemon worker.js",
+    "redis:up": "docker compose up -d redis",
+    "queue:ticket-pdf": "node scripts/enqueue-ticket-pdf.js",
     "test": "jest --runInBand",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
@@ -20,16 +28,20 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "bcrypt": "^6.0.0",
+    "bullmq": "^6.3.11",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "helmet": "^8.3.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^10.0.13",
+    "pdfkit": "^0.20.2",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.8",
     "zod": "^4.4.3"
   },

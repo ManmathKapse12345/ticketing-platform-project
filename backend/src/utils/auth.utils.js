@@ -48,26 +48,34 @@ const hashPassword = async (password) => {
     return bcrypt.hash(password,10);
 };
 
-const sendEmail = async(to, subject,html) => {
-    const transporter = nodemailer.createTransport({
+// Configured entirely from SMTP_* so any provider works (Gmail on 465, Mailtrap on 2525, ...).
+// Port 465 is implicit TLS; other ports upgrade with STARTTLS.
+let transporter;
+const getTransporter = () => {
+    const port = Number(process.env.SMTP_PORT) || 587;
+    transporter ??= nodemailer.createTransport({
         host:process.env.SMTP_HOST,
-        port:process.env.SMTP_PORT,
-        secure:true,
-        service:"gmail",
+        port,
+        secure:port === 465,
         auth:{
             user:process.env.SMTP_USER,
             pass:process.env.SMTP_PASS
         },
     });
+    return transporter;
+};
 
+// attachments: nodemailer format, e.g. [{ filename, content: Buffer, contentType }]
+const sendEmail = async(to, subject, html, attachments) => {
     const mailOptions = {
         from:process.env.EMAIL_USER,
         to,
         subject,
         html,
+        ...(attachments && { attachments }),
     };
 
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
 }
 
 const generateVerificationToken = () => {

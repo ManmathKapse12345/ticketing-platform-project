@@ -7,9 +7,12 @@ backend/dist/
 backend/build/
 
 backend/coverage/
+# Generated ticket PDFs (contain customers' names and valid QR codes)
+backend/storage/
 *.txt
 
 *.md
+!/README.md
 *.mmd
 /plans
 # Logs

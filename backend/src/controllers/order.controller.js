@@ -8,6 +8,7 @@ const {
   listOrganizationOrders,
   getOrganizationOrder,
 } = require("../services/order.service.js");
+const { getOrderTicketsPdf } = require("../services/ticketDelivery.service.js");
 
 const createOrderRequest = async (req, res, next) => {
   try {
@@ -72,6 +73,20 @@ const verifyPaymentRequest = async (req, res, next) => {
   }
 }
 
+const downloadTicketsPdfRequest = async (req, res, next) => {
+  try {
+    const { pdf, filename } = await getOrderTicketsPdf(req.params.orderId, req.user.id);
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "private, no-store",
+    });
+    return res.status(200).send(pdf);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const listOrganizationOrdersRequest = async (req, res, next) => {
   try {
     const orders = await listOrganizationOrders(req.params.organizationId);
@@ -96,6 +111,7 @@ module.exports = {
   getAllOrderRequest,
   checkoutRequest,
   verifyPaymentRequest,
+  downloadTicketsPdfRequest,
   listOrganizationOrdersRequest,
   getOrganizationOrderRequest,
 };

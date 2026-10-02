@@ -7,6 +7,7 @@ const {
   getAllOrderRequest,
   checkoutRequest,
   verifyPaymentRequest,
+  downloadTicketsPdfRequest,
 } = require("../controllers/order.controller");
 const router = express.Router({ mergeParams: true });
 
@@ -35,6 +36,13 @@ router.post(
   validateUuid("orderId"),
   authorize(...CUSTOMER_UP),
   verifyPaymentRequest,
+);
+
+router.get(
+  "/:orderId/tickets/pdf",
+  validateUuid("orderId"),
+  authorize(...CUSTOMER_UP),
+  downloadTicketsPdfRequest,
 );
 
 module.exports = router;

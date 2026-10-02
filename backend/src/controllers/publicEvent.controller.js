@@ -3,7 +3,7 @@ const {
   getPublishedEvent,
   listPublicTicketTiers,
 } = require("../services/publicEvent.service.js");
-const listPublishedEventsSchema = require("../validators/publicEvent.validator.js");
+const { listPublishedEventsSchema } = require("../validators/publicEvent.validator.js");
 
 const listPublishedEventsRequest = async (req, res, next) => {
   try {
@@ -20,7 +20,7 @@ const listPublishedEventsRequest = async (req, res, next) => {
 
 const getPublishedEventRequest = async (req, res, next) => {
   try {
-    const event = await getPublishedEvent(req.params.eventId);
+    const event = await getPublishedEvent(req.params.eventId, { countView: true });
     return res.status(200).json({ success: true, event });
   } catch (error) {
     next(error);

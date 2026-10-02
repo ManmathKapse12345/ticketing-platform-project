@@ -21,6 +21,12 @@ const {
   listOrganizationOrdersRequest,
   getOrganizationOrderRequest,
 } = require("../controllers/order.controller.js");
+const { getOrganizationOverviewRequest } = require("../controllers/analytics.controller.js");
+const {
+  updatePayoutDetailsRequest,
+  listPayoutsRequest,
+  requestPayoutRequest,
+} = require("../controllers/payout.controller.js");
 const router = express.Router();
 
 const ADMIN_UP = ["admin", "owner"];
@@ -69,6 +75,36 @@ router.get(
   verifyToken,
   requireOrganizationRole(...ADMIN_UP),
   getOrganizationOrderRequest,
+);
+router.get(
+  "/:organizationId/analytics",
+  validateUuid("organizationId"),
+  verifyToken,
+  requireOrganizationRole(...ADMIN_UP),
+  getOrganizationOverviewRequest,
+);
+// Payouts: admins can see the balance; only the owner (who holds the payout
+// details) can change where money goes or ask for it.
+router.put(
+  "/:organizationId/payout-details",
+  validateUuid("organizationId"),
+  verifyToken,
+  requireOrganizationRole("owner"),
+  updatePayoutDetailsRequest,
+);
+router.get(
+  "/:organizationId/payouts",
+  validateUuid("organizationId"),
+  verifyToken,
+  requireOrganizationRole(...ADMIN_UP),
+  listPayoutsRequest,
+);
+router.post(
+  "/:organizationId/payouts",
+  validateUuid("organizationId"),
+  verifyToken,
+  requireOrganizationRole("owner"),
+  requestPayoutRequest,
 );
 router.get(
   "/:organizationId",

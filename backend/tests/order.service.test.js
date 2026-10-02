@@ -233,7 +233,12 @@ describe("verifyCheckoutPayment", () => {
     expect(paid.paymentStatus).toBe("PAID");
     const payment = await prisma.payment.findFirst({ where: { orderId: order.id } });
     expect(payment).toMatchObject({ status: "SUCCESS", gatewayPaymentId: "pay_test_1" });
-    expect(await prisma.ticket.count({ where: { orderId: order.id } })).toBe(2);
+    const tickets = await prisma.ticket.findMany({ where: { orderId: order.id } });
+    expect(tickets).toHaveLength(2);
+    // Each ticket remembers its tier, for the PDF and check-in.
+    const [item] = await prisma.orderItem.findMany({ where: { orderId: order.id } });
+    expect(tickets.every((t) => t.ticketTierId === item.ticketTierId)).toBe(true);
+    expect(paid.paidAt).toBeInstanceOf(Date);
   });
 
   it("rejects a forged signature and leaves the order unpaid", async () => {

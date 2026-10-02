@@ -10,6 +10,8 @@ const orderRoutes = require("./src/routes/order.routes.js");
 const paymentRoutes = require("./src/routes/payment.routes.js");
 const ticketRoutes = require("./src/routes/ticket.routes.js");
 const publicEventRoutes = require("./src/routes/publicEvent.routes.js");
+const adminRoutes = require("./src/routes/admin.routes.js");
+const prisma = require("./src/config/prisma.js");
 const validateUuid = require("./src/middleware/validateUuid.middleware.js");
 const cookieParser = require("cookie-parser");
 const dns = require("dns");
@@ -22,6 +24,21 @@ const requestId = require("./src/middleware/requestId.middleware.js");
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
 const app = express();
+
+// Behind one proxy hop in production (Render/Railway): use the client's IP from
+// X-Forwarded-For so the rate limiter doesn't treat every user as the proxy.
+if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
+
+// Health check for the host's load balancer: registered before the rate limiter
+// and logging so frequent probes are neither throttled nor noisy.
+app.get("/health", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ status: "ok", database: "up", uptime: Math.round(process.uptime()) });
+  } catch {
+    res.status(503).json({ status: "error", database: "down" });
+  }
+});
 
 app.use(requestId);
 app.use(
@@ -70,6 +87,8 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/tickets", ticketRoutes);
 
 app.use("/api/events", publicEventRoutes);
+
+app.use("/api/admin", adminRoutes);
 
 // Test page for paying through Razorpay Checkout; never exposed in production.
 if (process.env.NODE_ENV !== "production") {

@@ -6,6 +6,7 @@ const { signTicketQr } = require("../utils/qr.utils.js");
 const { verifyPaymentSignature } = require("../utils/razorpay.utils.js");
 const getRazorpay = require("../config/razorpay.js");
 const prisma = require("../config/prisma.js");
+const { enqueueTicketPdf } = require("../queues/ticketPdf.queue.js");
 
 const TICKET_VALIDITY_WITHOUT_END_MS = 12*60*60*1000;
 
@@ -278,13 +279,13 @@ const fulfillPaidOrder = async (gatewayOrderId, gatewayPaymentId, amountMinor) =
     throw new ApiError(400,"Paid amount does not match the order total");
   }
 
-  return prisma.$transaction(async (tx) => {
+  const fulfilled = await prisma.$transaction(async (tx) => {
     const { count } = await tx.order.updateMany({
       where: { id: payment.orderId, paymentStatus: "PENDING" },
-      data: { paymentStatus: "PAID" },
+      data: { paymentStatus: "PAID", paidAt: new Date() },
     });
 
-    if(count === 0)  return;
+    if(count === 0)  return false;
 
     await tx.payment.update({
       where: { id: payment.id },
@@ -311,6 +312,7 @@ const fulfillPaidOrder = async (gatewayOrderId, gatewayPaymentId, amountMinor) =
           eventId: item.eventId,
           organizationId: order.organizationId,
           ownerUserId: order.userId,
+          ticketTierId: item.ticketTierId,
           qrCode: signTicketQr({
             ticketId: id,
             eventId: item.eventId,
@@ -321,7 +323,41 @@ const fulfillPaidOrder = async (gatewayOrderId, gatewayPaymentId, amountMinor) =
     );
 
     await tx.ticket.createMany({ data: tickets });
+    return true;
   });
+
+  // After commit, so the worker can see the tickets. Not awaited: the payment is
+  // already recorded, and a Redis outage must not fail or slow the webhook.
+  // requeueUndeliveredTickets catches anything that doesn't make it onto the queue.
+  if (fulfilled) {
+    Promise.resolve()
+      .then(() => enqueueTicketPdf(payment.orderId))
+      .catch((error) =>
+        console.error(`Couldn't enqueue tickets for order ${payment.orderId}:`, error.message),
+      );
+  }
+};
+
+const UNDELIVERED_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+const UNDELIVERED_GRACE_MS = 5 * 60 * 1000;
+
+// Safety net for enqueues lost while Redis was down: paid orders from the last
+// day whose tickets still haven't been emailed. Orders already on the queue
+// (or failed and kept for inspection) are ignored by BullMQ via jobId.
+const requeueUndeliveredTickets = async () => {
+  const now = Date.now();
+  const orders = await prisma.order.findMany({
+    where: {
+      paymentStatus: "PAID",
+      ticketsEmailedAt: null,
+      paidAt: { gte: new Date(now - UNDELIVERED_LOOKBACK_MS), lte: new Date(now - UNDELIVERED_GRACE_MS) },
+    },
+    select: { id: true },
+  });
+  for (const { id } of orders) {
+    await enqueueTicketPdf(id);
+  }
+  return orders.length;
 };
 
 // payment.failed webhook: mark the attempt FAILED so the next checkout creates a fresh Razorpay order.
@@ -361,5 +397,6 @@ module.exports = {
   markPaymentFailed,
   listOrganizationOrders,
   getOrganizationOrder,
-  cancelPendingOrder
+  cancelPendingOrder,
+  requeueUndeliveredTickets,
 };
