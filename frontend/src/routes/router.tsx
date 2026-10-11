@@ -28,6 +28,8 @@ import EventFormPage from "@/features/org/EventFormPage";
 import OrgOrderPage from "@/features/org/OrgOrderPage";
 import OrgOrdersPage from "@/features/org/OrgOrdersPage";
 import ScanPage from "@/features/org/ScanPage";
+import OrgAnalyticsPage from "@/features/org/analytics/OrgAnalyticsPage";
+import EventAnalyticsPage from "@/features/org/analytics/EventAnalyticsPage";
 
 export const router = createBrowserRouter([
   {
@@ -84,6 +86,8 @@ export const router = createBrowserRouter([
                     children: [
                       { path: "orders", element: <OrgOrdersPage /> },
                       { path: "orders/:orderId", element: <OrgOrderPage /> },
+                      { path: "analytics", element: <OrgAnalyticsPage /> },
+                      { path: "events/:eventId/analytics", element: <EventAnalyticsPage /> },
                     ],
                   },
                 ],

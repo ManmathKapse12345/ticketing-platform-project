@@ -2,7 +2,9 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { api } from "@/lib/api";
 import type { OrgRole } from "@/features/auth/types";
-import type { CheckedInTicket, Member, OrgEvent, OrgOrder, Organization, TicketTier } from "./types";
+import type {
+  CheckedInTicket, EventAnalytics, Member, OrgAnalytics, OrgEvent, OrgOrder, Organization, TicketTier,
+} from "./types";
 
 export const orgKeys = {
   mine: ["organization", "mine"] as const,
@@ -13,6 +15,9 @@ export const orgKeys = {
   members: (orgId: string) => ["organization", orgId, "members"] as const,
   orders: (orgId: string) => ["organization", orgId, "orders"] as const,
   order: (orgId: string, orderId: string) => ["organization", orgId, "orders", orderId] as const,
+  analytics: (orgId: string) => ["organization", orgId, "analytics"] as const,
+  eventAnalytics: (orgId: string, eventId: string, days: number) =>
+    ["organization", orgId, "events", eventId, "analytics", days] as const,
 };
 
 const org = (orgId: string) => `/organization/${orgId}`;
@@ -74,6 +79,29 @@ export const useOrgOrder = (orgId: string, orderId: string) =>
   useQuery({
     queryKey: orgKeys.order(orgId, orderId),
     queryFn: () => api.get<{ order: OrgOrder }>(`${org(orgId)}/orders/${orderId}`).then((r) => r.data.order),
+  });
+
+export const useOrgAnalytics = (orgId: string) =>
+  useQuery({
+    queryKey: orgKeys.analytics(orgId),
+    queryFn: () => api.get<{ analytics: OrgAnalytics }>(`${org(orgId)}/analytics`).then((r) => r.data.analytics),
+  });
+
+/** Daily sales cover the last `days` days, ending now */
+export const useEventAnalytics = (orgId: string, eventId: string, days: number) =>
+  useQuery({
+    queryKey: orgKeys.eventAnalytics(orgId, eventId, days),
+    placeholderData: (previous) => previous, // keep the old chart on screen while a new range loads
+    refetchInterval: 30_000, // check-ins change during the event
+    queryFn: () => {
+      const to = new Date();
+      const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+      return api
+        .get<{ analytics: EventAnalytics }>(`${org(orgId)}/events/${eventId}/analytics`, {
+          params: { from: from.toISOString(), to: to.toISOString() },
+        })
+        .then((r) => r.data.analytics);
+    },
   });
 
 // ---------- mutations ----------

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ExternalLink, Pencil, ScanLine } from "lucide-react";
+import { ChartColumn, ExternalLink, Pencil, ScanLine } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FullPageSpinner } from "@/components/FullPageSpinner";
@@ -55,6 +55,9 @@ export default function OrgEventPage() {
         <div className="flex flex-wrap gap-2">
           {event.status === "PUBLISHED" && (
             <Link to="scan" className={buttonVariants()}><ScanLine /> Scan tickets</Link>
+          )}
+          {can("admin") && (
+            <Link to="analytics" className={buttonVariants({ variant: "outline" })}><ChartColumn /> Analytics</Link>
           )}
           {event.status === "PUBLISHED" && (
             <Link to={`/events/${event.id}`} target="_blank" className={buttonVariants({ variant: "ghost" })}>

@@ -48,6 +48,43 @@ export interface OrgOrder extends Order {
   payments?: { id: string; amountMinor: number; refundedMinor: number; status: string; refunds: Refund[] }[];
 }
 
+// Rates are 0..1, or null when there's nothing to divide by ("no data", not 0%).
+export interface Revenue {
+  grossMinor: number;
+  refundedMinor: number;
+  netMinor: number;
+  paidOrders: number;
+}
+
+export interface EventAnalytics {
+  event: { id: string; title: string; status: EventStatus; startDate: string };
+  revenue: Revenue;
+  tiers: {
+    tierId: string;
+    name: string;
+    priceMinor: number;
+    quantityTotal: number;
+    sold: number;
+    revenueMinor: number;
+    sellThroughRate: number | null;
+  }[];
+  dailySales: { day: string; orders: number; tickets: number; revenueMinor: number }[]; // only days with sales
+  attendance: { issued: number; checkedIn: number; cancelled: number; attendanceRate: number | null };
+  traffic: { views: number; paidOrders: number; conversionRate: number | null };
+}
+
+export interface OrgAnalytics {
+  totals: Revenue;
+  events: (Revenue & {
+    eventId: string;
+    title: string;
+    status: EventStatus;
+    startDate: string;
+    views: number;
+    conversionRate: number | null;
+  })[];
+}
+
 export interface CheckedInTicket {
   id: string;
   status: "active" | "used" | "cancelled";

@@ -11,6 +11,7 @@ export function OrgLayout() {
 
   const links = [
     { to: "events", label: "Events", show: true },
+    { to: "analytics", label: "Analytics", show: can("admin") },
     { to: "orders", label: "Orders", show: can("admin") },
     { to: "members", label: "Members", show: true },
     { to: "settings", label: "Settings", show: true },
