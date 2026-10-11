@@ -7,7 +7,7 @@ const createEventSchema = z
     venue: z.string().optional(),
     startDate: z.coerce.date(),
     endDate: z.coerce.date().optional(),
-    status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED"]).optional(),
+    status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
   })
   .refine((data) => !data.endDate || data.endDate >= data.startDate, {
     message: "endDate must be on or after startDate",
@@ -21,7 +21,7 @@ const updateEventSchema = z
     venue: z.string().optional(),
     startDate: z.coerce.date().optional(),
     endDate: z.coerce.date().optional(),
-    status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED"]).optional(),
+    status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
   })
   .refine(
     (data) =>

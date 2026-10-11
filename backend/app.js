@@ -45,6 +45,7 @@ app.use(
   pinoHttp({
     genReqId: (req) => req.id,
     redact: ["req.headers.authorization", "req.headers.cookie"],
+    enabled:process.env.NODE_ENV !== "test",
   }),
 );
 app.use(helmet());
@@ -59,11 +60,12 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 100,
+    limit: Number(process.env.RATE_LIMIT_MAX) || (process.env.NODE_ENV === "production" ? 300 : 5000),
     standardHeaders: "draft-8",
     legacyHeaders: false,
   }),
 );
+
 app.use(
   express.json({
     verify: (req, _res, buffer) => {

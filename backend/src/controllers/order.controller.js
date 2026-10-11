@@ -7,6 +7,7 @@ const {
   verifyCheckoutPayment,
   listOrganizationOrders,
   getOrganizationOrder,
+  cancelOrderForUser
 } = require("../services/order.service.js");
 const { getOrderTicketsPdf } = require("../services/ticketDelivery.service.js");
 
@@ -105,6 +106,16 @@ const getOrganizationOrderRequest = async (req, res, next) => {
   }
 };
 
+const cancelOrderRequest = async (req, res, next) => {
+  try {
+    const order = await cancelOrderForUser(req.params.orderId, req.user.id);
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 module.exports = {
   createOrderRequest,
   getOrderRequest,
@@ -114,4 +125,5 @@ module.exports = {
   downloadTicketsPdfRequest,
   listOrganizationOrdersRequest,
   getOrganizationOrderRequest,
+  cancelOrderRequest
 };

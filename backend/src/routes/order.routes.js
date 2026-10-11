@@ -8,6 +8,7 @@ const {
   checkoutRequest,
   verifyPaymentRequest,
   downloadTicketsPdfRequest,
+  cancelOrderRequest
 } = require("../controllers/order.controller");
 const router = express.Router({ mergeParams: true });
 
@@ -43,6 +44,13 @@ router.get(
   validateUuid("orderId"),
   authorize(...CUSTOMER_UP),
   downloadTicketsPdfRequest,
+);
+
+router.post(
+  "/:orderId/cancel",
+  validateUuid("orderId"),
+  authorize(...CUSTOMER_UP),
+  cancelOrderRequest,
 );
 
 module.exports = router;

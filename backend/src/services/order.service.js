@@ -153,7 +153,10 @@ const getOrder = async (orderId, userId) => {
     await expireOrder(orderId);
     const order = await prisma.order.findFirst({
       where: { id: orderId, userId },
-      include: { items: true },
+      include: { 
+        items: true,
+        event: { select: { id: true, title: true, startDate: true, endDate: true, venue: true } }, 
+      },
     });
     if(!order)  throw new ApiError(404,"Order not found");
     return order;
@@ -162,7 +165,10 @@ const getOrder = async (orderId, userId) => {
 const findUserOrders = (userId) =>
   prisma.order.findMany({
     where: { userId },
-    include: { items: true },
+    include: { 
+      items: true,
+      event: { select: { id: true, title: true, startDate: true, endDate: true, venue: true } }, 
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -180,10 +186,22 @@ const getAllOrder = async (userId) => {
   return orders;
 }
 
+const ORG_ORDER_INCLUDE = {
+  items: true,
+  event: { select: { id: true, title: true, startDate: true } },
+  user: { select: { id: true, name: true, email: true } },
+  payments: {
+    select: {
+      id: true, amountMinor: true, refundedMinor: true, status: true,
+      refunds: { orderBy: { createdAt: "desc" } },
+    },
+  },
+};
+
 const listOrganizationOrders = (organizationId) =>
   prisma.order.findMany({
     where: { organizationId },
-    include: { items: true },
+    include: ORG_ORDER_INCLUDE,
     orderBy: { createdAt: "desc" },
   });
 
@@ -385,6 +403,18 @@ const cancelPendingOrder = (orderId) =>
     }
   });
 
+const cancelOrderForUser = async (orderId, userId) => {
+  const order = await prisma.order.findFirst({ where: { id: orderId, userId } });
+  if (!order) throw new ApiError(404, "Order not found");
+  if (order.paymentStatus !== "PENDING") {
+    throw new ApiError(409, `Order is ${order.paymentStatus.toLowerCase()}, cannot cancel`);
+  }
+  await cancelPendingOrder(orderId);
+  return prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+};
+
+
+
 module.exports = {
   createOrder,
   expireOrder,
@@ -399,4 +429,5 @@ module.exports = {
   getOrganizationOrder,
   cancelPendingOrder,
   requeueUndeliveredTickets,
+  cancelOrderForUser
 };

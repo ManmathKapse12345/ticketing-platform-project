@@ -2,6 +2,11 @@ const prisma = require("../config/prisma.js");
 const ApiError = require("../utils/apiError.js");
 const { verifyTicketQr } = require("../utils/qr.utils.js");
 
+const TICKET_INCLUDE = {
+  event: { select: { id: true, title: true, startDate: true, endDate: true, venue: true } },
+  ticketTier: { select: { name: true } },
+};
+
 const checkInTicket = async (organizationId,eventId,qrCode) => {
     let decoded;
     try {
@@ -34,13 +39,20 @@ const checkInTicket = async (organizationId,eventId,qrCode) => {
 }
 
 const getSpecificTicket = async (ticketId, userId) => {
-    const ticket = await prisma.ticket.findFirst({ where: { id: ticketId, ownerUserId: userId } });
-    if(!ticket)  throw new ApiError(404,"ticket doesn't exists");
-    return ticket;
-}
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, ownerUserId: userId },
+    include: TICKET_INCLUDE,
+  });
+  if (!ticket) throw new ApiError(404, "ticket doesn't exists");
+  return ticket;
+};
 
 const getAllTicket = (userId) =>
-    prisma.ticket.findMany({ where: { ownerUserId: userId } });
+  prisma.ticket.findMany({
+    where: { ownerUserId: userId },
+    include: TICKET_INCLUDE,
+    orderBy: { createdAt: "desc" },
+  });
 
 const listEventTickets = (eventId, organizationId) =>
     prisma.ticket.findMany({
