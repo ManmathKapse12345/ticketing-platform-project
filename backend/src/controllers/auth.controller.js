@@ -14,6 +14,16 @@ const {
 const { generateToken, sendEmail, sendVerificationEmail } = require("../utils/auth.utils.js");
 const ApiError = require("../utils/apiError.js");
 
+// The account already exists by the time this runs, so a mail problem must not
+// turn a successful sign-up into an error. The user can ask for a resend later.
+const trySendVerificationEmail = async (req, email, verifyUrl) => {
+  try {
+    await sendVerificationEmail(email, verifyUrl);
+  } catch (error) {
+    req.log.error({ err: error }, "Verification email failed");
+  }
+};
+
 const register = async (req, res, next) => {
   try {
     const {
@@ -40,7 +50,7 @@ const register = async (req, res, next) => {
         sameSite: "strict",
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
-      await sendVerificationEmail(user.email, verifyUrl);
+      await trySendVerificationEmail(req, user.email, verifyUrl);
       res.status(201).json({
         success: true,
         message:
@@ -71,7 +81,7 @@ const register = async (req, res, next) => {
         sameSite: "strict",
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
-      await sendVerificationEmail(user.email, verifyUrl);
+      await trySendVerificationEmail(req, user.email, verifyUrl);
       res.status(201).json({
         success: true,
         message:
