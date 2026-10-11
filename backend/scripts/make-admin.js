@@ -15,7 +15,8 @@ const main = async () => {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) throw new Error(`No user with email ${email}. Register in the app first.`);
 
-  await prisma.user.update({ where: { id: user.id }, data: { role: "platformAdmin" } });
+  // Also verified: login requires it, and the verification email may not have arrived.
+  await prisma.user.update({ where: { id: user.id }, data: { role: "platformAdmin", isVerified: true } });
   const host = new URL(process.env.DATABASE_URL).host;
   console.log(`${email} is now a platform admin (database: ${host}). Log out and back in to use /admin.`);
 };

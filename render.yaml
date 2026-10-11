@@ -1,6 +1,12 @@
-# Render Blueprint: API + worker + Postgres + Redis (Key Value).
+# Render Blueprint: API + web app + Postgres, all on free plans (no card needed).
 # Dashboard > New > Blueprint > pick this repo. Values marked `sync: false`
 # are asked for once in the dashboard and never stored in git.
+#
+# The background worker (ticket PDF emails) isn't here because Render has no free
+# plan for workers. Without it, JOB_QUEUE_DISABLED skips the queue: payments,
+# tickets and check-in all work, and customers download their PDF from the order
+# page instead of getting it by email. To add it back later (paid), see the
+# commented-out block at the end of this file.
 envVarGroups:
   - name: ticketing-shared
     envVars:
@@ -51,11 +57,8 @@ services:
         fromDatabase:
           name: ticketing-db
           property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: ticketing-redis
-          property: connectionString
+      - key: JOB_QUEUE_DISABLED
+        value: "true" # no worker/Redis on the free plan; remove when adding them
 
   # The React app. /api is forwarded to the API, so the browser sees one site:
   # the login cookie (sameSite: strict) only works if the API looks same-origin.
@@ -75,34 +78,36 @@ services:
         source: /*
         destination: /index.html
 
-  # Background workers aren't on Render's free plan.
-  - type: worker
-    name: ticketing-worker
-    runtime: node
-    rootDir: backend
-    plan: starter
-    buildCommand: npm ci
-    startCommand: npm run worker
-    envVars:
-      - fromGroup: ticketing-shared
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ticketing-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: ticketing-redis
-          property: connectionString
-
-  - type: keyvalue
-    name: ticketing-redis
-    plan: free
-    # BullMQ must never have its keys evicted.
-    maxmemoryPolicy: noeviction
-    ipAllowList: [] # only reachable from services in this Render account
-
 databases:
   - name: ticketing-db
     plan: free
     databaseName: ticketing
+
+# ---------------------------------------------------------------------------
+# Paid add-on: emailed ticket PDFs. Move these two blocks under `services:`,
+# give the API a REDIS_URL from ticketing-redis, and delete JOB_QUEUE_DISABLED.
+# - type: worker
+#   name: ticketing-worker
+#   runtime: node
+#   rootDir: backend
+#   plan: starter
+#   buildCommand: npm ci
+#   startCommand: npm run worker
+#   envVars:
+#     - fromGroup: ticketing-shared
+#     - key: DATABASE_URL
+#       fromDatabase:
+#         name: ticketing-db
+#         property: connectionString
+#     - key: REDIS_URL
+#       fromService:
+#         type: keyvalue
+#         name: ticketing-redis
+#         property: connectionString
+#
+# - type: keyvalue
+#   name: ticketing-redis
+#   plan: free
+#   # BullMQ must never have its keys evicted.
+#   maxmemoryPolicy: noeviction
+#   ipAllowList: [] # only reachable from services in this Render account
