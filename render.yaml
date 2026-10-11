@@ -57,6 +57,24 @@ services:
           name: ticketing-redis
           property: connectionString
 
+  # The React app. /api is forwarded to the API, so the browser sees one site:
+  # the login cookie (sameSite: strict) only works if the API looks same-origin.
+  # If Render gives the API a different URL than below, change both rewrites' destination.
+  - type: web
+    name: ticketing-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://ticketing-api.onrender.com/api/*
+      # Every other path is a React Router page.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
   # Background workers aren't on Render's free plan.
   - type: worker
     name: ticketing-worker
