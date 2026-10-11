@@ -51,3 +51,17 @@ describe("POST /api/auth/resend-verification", () => {
     expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("POST /api/auth/register", () => {
+  it("still creates the account when the verification email can't be sent", async () => {
+    mockSendMail.mockRejectedValueOnce(new Error("connect ECONNREFUSED 127.0.0.1:587"));
+
+    const res = await request(app)
+      .post("/api/auth/register")
+      .send({ name: "New User", email: "new.user@example.com", password: "Password123!" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.accessToken).toBeDefined();
+    expect(await prisma.user.findUnique({ where: { email: "new.user@example.com" } })).not.toBeNull();
+  });
+});
