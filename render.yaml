@@ -26,6 +26,10 @@ envVarGroups:
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
+      # Render's free plan blocks outgoing SMTP, so email goes through Brevo's
+      # HTTPS API. EMAIL_USER must be a sender verified in Brevo.
+      - key: BREVO_API_KEY
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
