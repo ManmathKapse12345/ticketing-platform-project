@@ -47,3 +47,10 @@ export interface OrgOrder extends Order {
   user?: { id: string; name: string; email: string };
   payments?: { id: string; amountMinor: number; refundedMinor: number; status: string; refunds: Refund[] }[];
 }
+
+export interface CheckedInTicket {
+  id: string;
+  status: "active" | "used" | "cancelled";
+  ticketTier: { name: string } | null;
+  owner: { name: string; email: string };
+}

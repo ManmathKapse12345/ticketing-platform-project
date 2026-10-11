@@ -2,7 +2,7 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { api } from "@/lib/api";
 import type { OrgRole } from "@/features/auth/types";
-import type { Member, OrgEvent, OrgOrder, Organization, TicketTier } from "./types";
+import type { CheckedInTicket, Member, OrgEvent, OrgOrder, Organization, TicketTier } from "./types";
 
 export const orgKeys = {
   mine: ["organization", "mine"] as const,
@@ -132,7 +132,12 @@ export const updateOrganization = (
 export const refundOrder = (orgId: string, orderId: string, body: { amountMinor?: number; reason?: string }) =>
   api.post(`${org(orgId)}/orders/${orderId}/refund`, body);
 
-export const acceptInvite = (token: string) =>
+export const checkInTicket = (orgId: string, eventId: string, qrCode: string) =>
+  api
+    .post<{ ticket: CheckedInTicket }>(`${org(orgId)}/events/${eventId}/checkin`, { qrCode })
+    .then((r) => r.data.ticket);
+
+export const acceptInvite =(token: string) =>
   api.post<{ organization: { id: string; name: string } }>(`/organization/invite/${token}/accept`).then((r) => r.data.organization);
 
 export const registerFromInvite = (token: string, name: string, password: string) =>

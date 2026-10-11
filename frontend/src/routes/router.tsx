@@ -27,6 +27,7 @@ import OrgSettingsPage from "@/features/org/OrgSettingsPage";
 import EventFormPage from "@/features/org/EventFormPage";
 import OrgOrderPage from "@/features/org/OrgOrderPage";
 import OrgOrdersPage from "@/features/org/OrgOrdersPage";
+import ScanPage from "@/features/org/ScanPage";
 
 export const router = createBrowserRouter([
   {
@@ -68,6 +69,7 @@ export const router = createBrowserRouter([
                   { index: true, element: <Navigate to="events" replace /> },
                   { path: "events", element: <OrgEventsPage /> },
                   { path: "events/:eventId", element: <OrgEventPage /> },
+                  { path: "events/:eventId/scan", element: <ScanPage /> },
                   { path: "members", element: <MembersPage /> },
                   { path: "settings", element: <OrgSettingsPage /> },
                   {

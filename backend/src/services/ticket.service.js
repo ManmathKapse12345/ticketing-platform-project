@@ -26,8 +26,13 @@ const checkInTicket = async (organizationId,eventId,qrCode) => {
         data: { status: "used" },
     });
 
+    // Tier and owner let the door staff see who just walked in.
     const ticket = await prisma.ticket.findFirst({
         where: { id: decoded.ticketId, eventId, organizationId },
+        include: {
+            ticketTier: { select: { name: true } },
+            owner: { select: { name: true, email: true } },
+        },
     });
 
     if(count === 0){
