@@ -119,12 +119,44 @@ const requestPayout = (organizationId, requesterId) =>
     });
   });
 
+// Enough for the dashboard to show where money goes ("account ending 1234")
+// without ever sending the full account number or UPI ID back.
+const describePayoutDestination = (encryptedValue) => {
+  if (!encryptedValue) return null;
+  let details;
+  try {
+    details = decryptPayoutDetails(encryptedValue);
+  } catch {
+    return { method: "unreadable" }; // saved, but with a different key
+  }
+  if (details.method === "bank") {
+    return {
+      method: "bank",
+      accountHolderName: details.accountHolderName,
+      accountLast4: details.accountNumber.slice(-4),
+      ifsc: details.ifsc,
+    };
+  }
+  const [name, handle] = details.upiId.split("@");
+  return { method: "upi", upiId: `${name.slice(0, 2)}•••@${handle}` };
+};
+
 const listOrganizationPayouts = async (organizationId) => {
-  const [balance, payouts] = await Promise.all([
+  const [organization, balance, payouts] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { verifiedAt: true, payoutDetailsEncrypted: true },
+    }),
     getPayoutBalance(organizationId),
     prisma.payout.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" } }),
   ]);
-  return { balance, payouts };
+  if (!organization) throw new ApiError(404, "Organization not found");
+  return {
+    verified: !!organization.verifiedAt,
+    destination: describePayoutDestination(organization.payoutDetailsEncrypted),
+    balance,
+    payouts,
+  };
 };
 
 // Platform admin side.
@@ -136,12 +168,25 @@ const listAllPayouts = async ({ page, limit, status }) => {
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
-      include: { organization: { select: { id: true, name: true } } },
+      include: { organization: { select: { id: true, name: true, payoutDetailsEncrypted: true } } },
     }),
     prisma.payout.count({ where }),
   ]);
+  // Staff need the real account to send money, but only while a payout is waiting:
+  // settled payouts don't need it, so they don't get it.
+  const readDetails = (encryptedValue) => {
+    try {
+      return encryptedValue ? decryptPayoutDetails(encryptedValue) : null;
+    } catch {
+      return null;
+    }
+  };
   return {
-    payouts,
+    payouts: payouts.map(({ organization: { payoutDetailsEncrypted, ...organization }, ...payout }) => ({
+      ...payout,
+      organization,
+      payoutDetails: payout.status === "REQUESTED" ? readDetails(payoutDetailsEncrypted) : null,
+    })),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
 };

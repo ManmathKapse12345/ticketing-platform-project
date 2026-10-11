@@ -17,6 +17,7 @@ const {
   createOrder,
   createCheckout,
   verifyCheckoutPayment,
+  cancelOrderForUser,
 } = require("../src/services/order.service.js");
 
 beforeAll(async () => {
@@ -177,6 +178,40 @@ const makePendingOrder = async (quantity = 1) => {
   );
   return { order, userId };
 };
+
+describe("cancelOrderForUser", () => {
+  const reserve = async () => {
+    const tier = await makeTier();
+    const { id: userId } = await makeUser();
+    const order = await createOrder(
+      userId, tier.organizationId, tier.eventId, [{ ticketTier: tier.id, quantity: 2 }], `idem-${crypto.randomUUID()}`,
+    );
+    return { tier, userId, order };
+  };
+
+  it("cancels a pending order and releases its seats", async () => {
+    const { tier, userId, order } = await reserve();
+
+    const cancelled = await cancelOrderForUser(order.id, userId);
+
+    expect(cancelled.paymentStatus).toBe("CANCELLED");
+    expect((await findTier(tier.id)).quantitySold).toBe(0);
+  });
+
+  it("refuses to cancel an order that isn't pending", async () => {
+    const { userId, order } = await reserve();
+    await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: "PAID" } });
+
+    await expect(cancelOrderForUser(order.id, userId)).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("hides another user's order", async () => {
+    const { order } = await reserve();
+    const { id: strangerId } = await makeUser();
+
+    await expect(cancelOrderForUser(order.id, strangerId)).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
 
 describe("createCheckout", () => {
   it("creates a Razorpay order in INR and stores the Payment record", async () => {

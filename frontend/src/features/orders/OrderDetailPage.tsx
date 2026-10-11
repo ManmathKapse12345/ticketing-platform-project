@@ -3,13 +3,15 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, Download, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FullPageSpinner } from "@/components/FullPageSpinner";
 import { getErrorMessage } from "@/lib/api";
 import { formatDateRange, formatDateTime } from "@/lib/dates";
 import { formatMinor } from "@/lib/money";
-import { downloadTicketsPdf, useOrder, useTickets } from "./api";
+import { cancelOrder, downloadTicketsPdf, useOrder, useTickets } from "./api";
 import { OrderStatusBadge, TicketStatusBadge } from "./StatusBadge";
 
 export default function OrderDetailPage() {
@@ -19,6 +21,8 @@ export default function OrderDetailPage() {
   const { data: order, isPending, isError, error } = useOrder(orderId, { pollWhilePending: justPaid });
   const tickets = useTickets({ enabled: order?.paymentStatus === "PAID" });
   const [downloading, setDownloading] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const qc = useQueryClient();
 
   if (isPending) return <FullPageSpinner />;
   if (isError) return <p className="px-4 py-16 text-center">{getErrorMessage(error)}</p>;
@@ -35,6 +39,13 @@ export default function OrderDetailPage() {
     } finally {
       setDownloading(false);
     }
+  };
+
+  const cancel = async () => {
+    await cancelOrder(order.id);
+    qc.invalidateQueries({ queryKey: ["orders"] });
+    if (order.event) qc.invalidateQueries({ queryKey: ["event", order.event.id] }); // seats are back on sale
+    toast.success("Order cancelled");
   };
 
   return (
@@ -77,8 +88,14 @@ export default function OrderDetailPage() {
       </Card>
 
       {isLive && !justPaid && (
-        <Link to={`/checkout/${order.id}`} className={buttonVariants()}>Complete payment</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to={`/checkout/${order.id}`} className={buttonVariants()}>Complete payment</Link>
+          <Button variant="outline" onClick={() => setConfirmCancel(true)}>Cancel order</Button>
+        </div>
       )}
+      <ConfirmDialog open={confirmCancel} onOpenChange={setConfirmCancel} title="Cancel this order?" destructive
+        description="Your reserved tickets are released so other people can buy them. You haven't been charged."
+        confirmLabel="Cancel order" onConfirm={cancel} />
 
       {order.paymentStatus === "PAID" && (
         <section className="grid gap-3">

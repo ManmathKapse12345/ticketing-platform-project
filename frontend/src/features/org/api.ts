@@ -3,7 +3,8 @@ import axios from "axios";
 import { api } from "@/lib/api";
 import type { OrgRole } from "@/features/auth/types";
 import type {
-  CheckedInTicket, EventAnalytics, Member, OrgAnalytics, OrgEvent, OrgOrder, Organization, TicketTier,
+  CheckedInTicket, EventAnalytics, Member, OrgAnalytics, OrgEvent, OrgOrder, OrgPayouts, Organization, Payout,
+  PayoutDetailsInput, TicketTier,
 } from "./types";
 
 export const orgKeys = {
@@ -16,6 +17,7 @@ export const orgKeys = {
   orders: (orgId: string) => ["organization", orgId, "orders"] as const,
   order: (orgId: string, orderId: string) => ["organization", orgId, "orders", orderId] as const,
   analytics: (orgId: string) => ["organization", orgId, "analytics"] as const,
+  payouts: (orgId: string) => ["organization", orgId, "payouts"] as const,
   eventAnalytics: (orgId: string, eventId: string, days: number) =>
     ["organization", orgId, "events", eventId, "analytics", days] as const,
 };
@@ -104,6 +106,12 @@ export const useEventAnalytics = (orgId: string, eventId: string, days: number) 
     },
   });
 
+export const useOrgPayouts = (orgId: string) =>
+  useQuery({
+    queryKey: orgKeys.payouts(orgId),
+    queryFn: () => api.get<OrgPayouts>(`${org(orgId)}/payouts`).then((r) => r.data),
+  });
+
 // ---------- mutations ----------
 export interface EventInput {
   title: string;
@@ -160,7 +168,14 @@ export const updateOrganization = (
 export const refundOrder = (orgId: string, orderId: string, body: { amountMinor?: number; reason?: string }) =>
   api.post(`${org(orgId)}/orders/${orderId}/refund`, body);
 
-export const checkInTicket = (orgId: string, eventId: string, qrCode: string) =>
+export const updatePayoutDetails = (orgId: string, body: PayoutDetailsInput) =>
+  api.put(`${org(orgId)}/payout-details`, body);
+
+/** Always requests the whole available balance */
+export const requestPayout = (orgId: string) =>
+  api.post<{ payout: Payout }>(`${org(orgId)}/payouts`).then((r) => r.data.payout);
+
+export const checkInTicket =(orgId: string, eventId: string, qrCode: string) =>
   api
     .post<{ ticket: CheckedInTicket }>(`${org(orgId)}/events/${eventId}/checkin`, { qrCode })
     .then((r) => r.data.ticket);

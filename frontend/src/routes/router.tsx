@@ -30,6 +30,11 @@ import OrgOrdersPage from "@/features/org/OrgOrdersPage";
 import ScanPage from "@/features/org/ScanPage";
 import OrgAnalyticsPage from "@/features/org/analytics/OrgAnalyticsPage";
 import EventAnalyticsPage from "@/features/org/analytics/EventAnalyticsPage";
+import PayoutsPage from "@/features/org/payouts/PayoutsPage";
+import { AdminLayout } from "@/features/admin/AdminLayout";
+import AdminPayoutsPage from "@/features/admin/AdminPayoutsPage";
+import AdminOrganizationsPage from "@/features/admin/AdminOrganizationsPage";
+import AdminUsersPage from "@/features/admin/AdminUsersPage";
 
 export const router = createBrowserRouter([
   {
@@ -56,7 +61,16 @@ export const router = createBrowserRouter([
           {
             element: <RequirePlatformAdmin />,
             children: [
-              { path: "/admin", element: <div className="p-8">Admin dashboard (Phase 6)</div> },
+              {
+                path: "/admin",
+                element: <AdminLayout />,
+                children: [
+                  { index: true, element: <Navigate to="payouts" replace /> },
+                  { path: "payouts", element: <AdminPayoutsPage /> },
+                  { path: "organizations", element: <AdminOrganizationsPage /> },
+                  { path: "users", element: <AdminUsersPage /> },
+                ],
+              },
             ],
           },
           { path: "/invite/:token/accept", element: <InviteAcceptPage /> },
@@ -87,6 +101,7 @@ export const router = createBrowserRouter([
                       { path: "orders", element: <OrgOrdersPage /> },
                       { path: "orders/:orderId", element: <OrgOrderPage /> },
                       { path: "analytics", element: <OrgAnalyticsPage /> },
+                      { path: "payouts", element: <PayoutsPage /> },
                       { path: "events/:eventId/analytics", element: <EventAnalyticsPage /> },
                     ],
                   },

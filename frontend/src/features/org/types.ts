@@ -85,6 +85,36 @@ export interface OrgAnalytics {
   })[];
 }
 
+export type PayoutStatus = "REQUESTED" | "PAID" | "CANCELLED";
+
+export interface Payout {
+  id: string;
+  organizationId: string;
+  amountMinor: number;
+  status: PayoutStatus;
+  reference: string | null; // bank/UTR reference once PAID
+  note: string | null;
+  processedAt: string | null;
+  createdAt: string;
+}
+
+/** Masked by the backend: the full account number / UPI ID never reaches the browser */
+export type PayoutDestination =
+  | { method: "bank"; accountHolderName: string; accountLast4: string; ifsc: string }
+  | { method: "upi"; upiId: string }
+  | { method: "unreadable" };
+
+export interface OrgPayouts {
+  verified: boolean;
+  destination: PayoutDestination | null;
+  balance: { settledMinor: number; reservedMinor: number; availableMinor: number };
+  payouts: Payout[];
+}
+
+export type PayoutDetailsInput =
+  | { method: "bank"; accountHolderName: string; accountNumber: string; ifsc: string }
+  | { method: "upi"; upiId: string };
+
 export interface CheckedInTicket {
   id: string;
   status: "active" | "used" | "cancelled";

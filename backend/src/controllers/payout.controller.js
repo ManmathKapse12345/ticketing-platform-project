@@ -20,8 +20,8 @@ const updatePayoutDetailsRequest = async (req, res, next) => {
 
 const listPayoutsRequest = async (req, res, next) => {
   try {
-    const { balance, payouts } = await listOrganizationPayouts(req.params.organizationId);
-    return res.status(200).json({ success: true, balance, payouts });
+    const result = await listOrganizationPayouts(req.params.organizationId);
+    return res.status(200).json({ success: true, ...result });
   } catch (error) {
     next(error);
   }

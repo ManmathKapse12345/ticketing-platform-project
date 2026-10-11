@@ -5,6 +5,9 @@ const {
   getPayoutBalance,
   requestPayout,
   updatePayoutStatus,
+  listOrganizationPayouts,
+  listAllPayouts,
+  encryptPayoutDetails,
 } = require("../src/services/payout.service.js");
 
 beforeAll(() => dbHandler.connect());
@@ -93,5 +96,59 @@ describe("updatePayoutStatus", () => {
     expect(paid).toMatchObject({ status: "PAID", reference: "UTR123" });
     expect(paid.processedAt).toBeInstanceOf(Date);
     expect((await getPayoutBalance(org.id)).availableMinor).toBe(0);
+  });
+});
+
+describe("listOrganizationPayouts", () => {
+  it("describes where money goes without exposing the full account number", async () => {
+    const { org } = await setup();
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        payoutDetailsEncrypted: encryptPayoutDetails({
+          method: "bank", accountHolderName: "Demo Events", accountNumber: "123456789012", ifsc: "HDFC0001234",
+        }),
+      },
+    });
+
+    const result = await listOrganizationPayouts(org.id);
+
+    expect(result.verified).toBe(true);
+    expect(result.destination).toEqual({
+      method: "bank", accountHolderName: "Demo Events", accountLast4: "9012", ifsc: "HDFC0001234",
+    });
+    expect(JSON.stringify(result)).not.toContain("123456789012");
+  });
+
+  it("masks a UPI ID and reports missing details as null", async () => {
+    const { org } = await setup();
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { payoutDetailsEncrypted: encryptPayoutDetails({ method: "upi", upiId: "demoevents@okaxis" }) },
+    });
+    expect((await listOrganizationPayouts(org.id)).destination).toEqual({ method: "upi", upiId: "de•••@okaxis" });
+
+    await prisma.organization.update({ where: { id: org.id }, data: { payoutDetailsEncrypted: null } });
+    expect((await listOrganizationPayouts(org.id)).destination).toBeNull();
+  });
+});
+
+describe("listAllPayouts", () => {
+  it("gives staff the real account only while a payout is waiting", async () => {
+    const { org, owner } = await setup();
+    const bank = { method: "bank", accountHolderName: "Demo Events", accountNumber: "123456789012", ifsc: "HDFC0001234" };
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { payoutDetailsEncrypted: encryptPayoutDetails(bank) },
+    });
+    const payout = await requestPayout(org.id, owner.id);
+
+    let [listed] = (await listAllPayouts({ page: 1, limit: 20 })).payouts;
+    expect(listed.payoutDetails).toEqual(bank);
+    expect(listed.organization).not.toHaveProperty("payoutDetailsEncrypted");
+
+    await updatePayoutStatus(payout.id, { status: "PAID", reference: "UTR123" });
+    [listed] = (await listAllPayouts({ page: 1, limit: 20 })).payouts;
+    expect(listed.payoutDetails).toBeNull();
   });
 });

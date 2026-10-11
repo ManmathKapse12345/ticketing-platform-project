@@ -1,5 +1,6 @@
 // Fills the dev database with everything needed to test a payment end-to-end:
-// a verified customer, an organization owner, a published event and a ticket tier.
+// a verified customer, an organization owner, a platform admin, a published event
+// and a ticket tier.
 // Safe to run repeatedly — existing rows are reused rather than duplicated.
 //
 //   npm run seed:dev
@@ -10,15 +11,16 @@ const { hashPassword } = require("../src/utils/auth.utils.js");
 const PASSWORD = "Password123!";
 const CUSTOMER_EMAIL = "customer@test.local";
 const OWNER_EMAIL = "owner@test.local";
+const ADMIN_EMAIL = "admin@test.local";
 const ORGANIZATION_NAME = "Demo Events Co";
 const EVENT_TITLE = "Demo Concert";
 const TIER_NAME = "General Admission";
 
-const upsertVerifiedUser = async (email, name, password) =>
+const upsertVerifiedUser = async (email, name, password, role = "customer") =>
   prisma.user.upsert({
     where: { email },
-    update: { isVerified: true },
-    create: { email, name, password, role: "customer", isVerified: true },
+    update: { isVerified: true, role },
+    create: { email, name, password, role, isVerified: true },
   });
 
 const main = async () => {
@@ -29,6 +31,7 @@ const main = async () => {
   const password = await hashPassword(PASSWORD);
   await upsertVerifiedUser(CUSTOMER_EMAIL, "Test Customer", password);
   const owner = await upsertVerifiedUser(OWNER_EMAIL, "Test Owner", password);
+  await upsertVerifiedUser(ADMIN_EMAIL, "Platform Admin", password, "platformAdmin");
 
   const organization = await prisma.organization.upsert({
     where: { name: ORGANIZATION_NAME },
@@ -78,6 +81,7 @@ const main = async () => {
   console.log("\nDev data ready:\n");
   console.log(`  Customer login : ${CUSTOMER_EMAIL} / ${PASSWORD}`);
   console.log(`  Owner login    : ${OWNER_EMAIL} / ${PASSWORD}`);
+  console.log(`  Admin login    : ${ADMIN_EMAIL} / ${PASSWORD}  (platform admin, /admin)`);
   console.log(`  Organization   : ${organization.name} (${organization.id})`);
   console.log(`  Event          : ${event.title} (${event.id})`);
   console.log(`  Ticket tier    : ${tier.name}, ₹${(tier.priceMinor / 100).toFixed(2)}, ${tier.quantityTotal - tier.quantitySold} left`);
